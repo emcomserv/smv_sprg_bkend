@@ -1,7 +1,7 @@
 package com.smart_vehicle.security.jwt;
 
-import com.smart_vehicle.security.services.ParentDetailsImpl;
-import com.smart_vehicle.security.services.ParentDetailsServiceImpl;
+import com.smart_vehicle.security.services.UserDetailsImpl;
+import com.smart_vehicle.security.services.UserDetailsServiceImpl;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -22,7 +22,7 @@ public class AuthTokenFilter extends OncePerRequestFilter {
   private JwtUtils jwtUtils;
 
   @Autowired
-  private ParentDetailsServiceImpl parentDetailsService;
+  private UserDetailsServiceImpl userDetailsService;
 
   private static final Logger logger = LoggerFactory.getLogger(AuthTokenFilter.class);
 
@@ -34,15 +34,15 @@ public class AuthTokenFilter extends OncePerRequestFilter {
       if (jwt != null && jwtUtils.validateJwtToken(jwt)) {
         String username = jwtUtils.getUserNameFromJwtToken(jwt);
 
-          ParentDetailsImpl parentDetails = parentDetailsService.loadUserByUsername(username);
-        UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(parentDetails, null,
-            parentDetails.getAuthorities());
+          UserDetailsImpl userDetails = userDetailsService.loadUserByUsername(username);
+        UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(userDetails, null,
+            null);
         authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
         SecurityContextHolder.getContext().setAuthentication(authentication);
       }
     } catch (Exception e) {
-      logger.error("Cannot set parent authentication: {}", e);
+      logger.error("Cannot set user authentication: {}", e);
     }
 
     filterChain.doFilter(request, response);

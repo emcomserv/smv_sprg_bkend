@@ -1,6 +1,6 @@
 package com.smart_vehicle.security.jwt;
 
-import com.smart_vehicle.security.services.ParentDetailsImpl;
+import com.smart_vehicle.security.services.UserDetailsImpl;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
@@ -25,7 +25,7 @@ public class JwtUtils {
 
   public String generateJwtToken(Authentication authentication) {
 
-    ParentDetailsImpl userPrincipal = (ParentDetailsImpl) authentication.getPrincipal();
+    UserDetailsImpl userPrincipal = (UserDetailsImpl) authentication.getPrincipal();
 
     return Jwts.builder()
         .setSubject((userPrincipal.getUsername()))

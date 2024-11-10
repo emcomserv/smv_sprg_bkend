@@ -8,7 +8,7 @@ public class LoginRequest {
 	private String userName;
 
 	@NotBlank
-	private String password;
+	private String pssword;
 
 	public String getUsername() {
 		return userName;
@@ -19,16 +19,16 @@ public class LoginRequest {
 	}
 
 	public String getPassword() {
-		return password;
+		return pssword;
 	}
 
 	public void setPassword(String password) {
-		this.password = password;
+		this.pssword = password;
 	}
 
 	@Override
 	public String toString() {
-		return "LoginRequest [userName=" + userName + ", password=" + password + "]";
+		return "LoginRequest [userName=" + userName + ", password=" + pssword + "]";
 	}
 
 }

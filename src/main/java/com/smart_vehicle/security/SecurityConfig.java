@@ -17,14 +17,14 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 import com.smart_vehicle.security.jwt.AuthEntryPointJwt;
 import com.smart_vehicle.security.jwt.AuthTokenFilter;
-import com.smart_vehicle.security.services.ParentDetailsServiceImpl;
+import com.smart_vehicle.security.services.UserDetailsServiceImpl;
 
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig  {
 
     @Autowired
-    ParentDetailsServiceImpl parentDetailsService;
+    UserDetailsServiceImpl userDetailsServiceImpl;
 
     @Autowired
     private AuthEntryPointJwt unauthorizedHandler;
@@ -39,7 +39,7 @@ public class SecurityConfig  {
     public DaoAuthenticationProvider authenticationProvider() {
         DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
 
-        authProvider.setUserDetailsService(parentDetailsService);
+        authProvider.setUserDetailsService(userDetailsServiceImpl);
         authProvider.setPasswordEncoder(passwordEncoder());
 
         return authProvider;
