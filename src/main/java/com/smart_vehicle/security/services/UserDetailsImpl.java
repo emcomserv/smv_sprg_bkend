@@ -6,7 +6,9 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 import com.smart_vehicle.models.User;
 
@@ -20,8 +22,18 @@ public class UserDetailsImpl implements UserDetails {
     @JsonIgnore
     private String password;
 
+    private String phone;
+
 
     private Collection<? extends GrantedAuthority> authorities;
+
+    public UserDetailsImpl(String id, String username, String password,Collection<? extends GrantedAuthority> authorities, String phone) {
+        this.id = id;
+        this.username = username;
+        this.password = password;
+        this.authorities = authorities;
+        this.phone = phone;
+    }
 
     public UserDetailsImpl(String id, String username, String password) {
         this.id = id;
@@ -29,10 +41,13 @@ public class UserDetailsImpl implements UserDetails {
         this.password = password;
     }
     public static UserDetailsImpl build(User user) {
-
+        List<GrantedAuthority> authorities = user.getRoles().stream()
+                .map(role -> new SimpleGrantedAuthority(role.getName().name()))
+                .collect(Collectors.toList());
         return new UserDetailsImpl(user.getUserId(),
                 user.getUsername(),
-                user.getPassword());
+                user.getPassword(),
+                authorities,user.getPhone());
     }
 
     @Override
@@ -53,6 +68,8 @@ public class UserDetailsImpl implements UserDetails {
     public String getUsername() {
         return username;
     }
+
+    public String getPhone(){return phone;}
 
     @Override
     public boolean isAccountNonExpired() {

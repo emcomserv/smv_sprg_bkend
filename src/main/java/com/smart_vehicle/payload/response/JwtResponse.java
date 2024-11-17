@@ -1,17 +1,23 @@
 package com.smart_vehicle.payload.response;
 
-import java.util.List;
-
 public class JwtResponse {
   private String token;
-  private String type = "Bearer";
   private String id;
   private String username;
 
-  public JwtResponse(String accessToken, String id, String username) {
+  private Boolean twoFactorAuthentication;
+
+  public JwtResponse(String id, String username, Boolean twoFactorAuthentication) {
+    this.id = id;
+    this.username = username;
+    this.twoFactorAuthentication = twoFactorAuthentication;
+  }
+
+  public JwtResponse(String accessToken, String id, String username, Boolean twoFactorAuthentication) {
     this.token = accessToken;
     this.id = id;
     this.username = username;
+    this.twoFactorAuthentication = twoFactorAuthentication;
   }
 
   public String getAccessToken() {
@@ -20,14 +26,6 @@ public class JwtResponse {
 
   public void setAccessToken(String accessToken) {
     this.token = accessToken;
-  }
-
-  public String getTokenType() {
-    return type;
-  }
-
-  public void setTokenType(String tokenType) {
-    this.type = tokenType;
   }
 
   public String getId() {
@@ -46,4 +44,11 @@ public class JwtResponse {
     this.username = username;
   }
 
+  public Boolean getTwoFactorAuthentication() {
+    return twoFactorAuthentication;
+  }
+
+  public void setTwoFactorAuthentication(Boolean twoFactorAuthentication) {
+    this.twoFactorAuthentication = twoFactorAuthentication;
+  }
 }

@@ -1,7 +1,12 @@
 package com.smart_vehicle.security;
 
 
+import com.smart_vehicle.security.services.TwilioVerificationService;
+import com.twilio.Twilio;
+import com.twilio.base.ResourceSet;
+import com.twilio.rest.verify.v2.Service;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -22,6 +27,15 @@ import com.smart_vehicle.security.services.UserDetailsServiceImpl;
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig  {
+
+    @Value("${twilio.account.sid}")
+    private String accountSid;
+
+    @Value("${twilio.auth.token}")
+    private String authToken;
+
+    @Value("${twilio.verification.service.name}")
+    private String serviceName;
 
     @Autowired
     UserDetailsServiceImpl userDetailsServiceImpl;
@@ -81,6 +95,26 @@ public class SecurityConfig  {
         // http.headers().frameOptions().disable();
         return http.build();
 
+    }
+
+    @Bean
+    public Service twilioService() {
+
+        Twilio.init(accountSid, authToken);
+        ResourceSet<Service> services = Service.reader().read();
+        for (Service service : services) {
+            if (service.getFriendlyName().equals(serviceName)){
+                System.out.println("Service found: " + serviceName + " with SID: " + service.getSid());
+                return Service.fetcher(service.getSid()).fetch();
+            }
+        }
+
+
+        // Create a new service if it doesn't exist
+        Service newService = Service.creator(serviceName).create();
+        String serviceSid = newService.getSid();
+        System.out.println("Service created: " + serviceName + " with SID: " + serviceSid);
+        return Service.fetcher(serviceSid).fetch();
     }
 
 }
