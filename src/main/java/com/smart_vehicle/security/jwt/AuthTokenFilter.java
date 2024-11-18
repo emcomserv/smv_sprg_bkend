@@ -10,12 +10,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.*;
 
 public class AuthTokenFilter extends OncePerRequestFilter {
   @Autowired
@@ -33,12 +35,15 @@ public class AuthTokenFilter extends OncePerRequestFilter {
       String jwt = parseJwt(request);
       if (jwt != null && jwtUtils.validateJwtToken(jwt)) {
         String username = jwtUtils.getUserNameFromJwtToken(jwt);
-
-          UserDetailsImpl userDetails = userDetailsService.loadUserByUsername(username);
+        String userId = jwtUtils.getUserIdFromJwtToken(jwt);
+        UserDetailsImpl userDetails = userDetailsService.loadUserByUsername(username);
+        List<GrantedAuthority> authorities = new ArrayList<>(userDetails.getAuthorities());
         UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(userDetails, null,
-            null);
+            authorities);
         authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-
+        Map<String, Object> additionalDetails = new HashMap<>();
+        additionalDetails.put("userId", userId);
+        authentication.setDetails(additionalDetails);
         SecurityContextHolder.getContext().setAuthentication(authentication);
       }
     } catch (Exception e) {

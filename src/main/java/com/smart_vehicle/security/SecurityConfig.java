@@ -26,7 +26,7 @@ import com.smart_vehicle.security.services.UserDetailsServiceImpl;
 
 @Configuration
 @EnableWebSecurity
-public class SecurityConfig  {
+public class SecurityConfig{
 
     @Value("${twilio.account.sid}")
     private String accountSid;
@@ -74,28 +74,28 @@ public class SecurityConfig  {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http.csrf(csrf -> csrf.disable())
-                .exceptionHandling(exception -> exception.authenticationEntryPoint(unauthorizedHandler))
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(exception ->
+                        exception.authenticationEntryPoint(unauthorizedHandler)
+                )
+                .sessionManagement(session ->
+                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                )
                 .authorizeHttpRequests(auth ->
-                                auth.requestMatchers("/smarthome/api/auth/**").permitAll()
-                                        .requestMatchers("/smarthome/api/otp/**").authenticated()
-                                        .anyRequest()
-                                        .permitAll()
-//				      .authenticated()
+                        auth.requestMatchers("/smartVehicle/api/auth/**").permitAll()
+                                .requestMatchers("/smartVehicle/parent/**").hasAuthority("PARENT")
+                                .requestMatchers("/smartVehicle/admin/**").hasAuthority("ADMIN")
+                                .anyRequest().authenticated() // All other requests require authentication
                 );
 
-        http.authenticationProvider(authenticationProvider());
-        http.csrf(httpSecurityCsrfConfigurer -> httpSecurityCsrfConfigurer.disable())
-                .headers(httpSecurityHeadersConfigurer -> {
-                    httpSecurityHeadersConfigurer.frameOptions(frameOptionsConfig -> {
-                        frameOptionsConfig.disable();
-                    });
-                });
-        http.addFilterBefore(authenticationJwtTokenFilter(), UsernamePasswordAuthenticationFilter.class);
-        // http.headers().frameOptions().disable();
-        return http.build();
+        // Disable frame options and configure CSRF (if necessary)
+        http.headers(headers -> headers.frameOptions(frameOptions -> frameOptions.disable()));
 
+        // Add JWT token filter
+        http.addFilterBefore(authenticationJwtTokenFilter(), UsernamePasswordAuthenticationFilter.class);
+
+        return http.build();
     }
+
 
     @Bean
     public Service twilioService() {
