@@ -23,6 +23,11 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import com.smart_vehicle.security.jwt.AuthEntryPointJwt;
 import com.smart_vehicle.security.jwt.AuthTokenFilter;
 import com.smart_vehicle.security.services.UserDetailsServiceImpl;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -76,13 +81,13 @@ public class SecurityConfig  {
         http.csrf(csrf -> csrf.disable())
                 .exceptionHandling(exception -> exception.authenticationEntryPoint(unauthorizedHandler))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .cors(customizer -> customizer.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(auth ->
-                                auth.requestMatchers("/smartVehicle/api/auth/**").permitAll()
-                                        .requestMatchers("/smartVehicle/parent/**").hasAuthority("PARENT") // Parent role
-                                        .requestMatchers("/smartVehicle/admin/**").hasAuthority("ADMIN") // Admin role
+                                auth.requestMatchers("/api/v1/auth/**").permitAll()
+//                                        .requestMatchers("/smartVehicle/parent/**").hasAuthority("PARENT") // Parent role
+//                                        .requestMatchers("/smartVehicle/admin/**").hasAuthority("ADMIN") // Admin role
                                         .anyRequest()
-                                        .permitAll()
-//				      .authenticated()
+                                        .authenticated()
                 );
 
         http.authenticationProvider(authenticationProvider());
@@ -98,24 +103,34 @@ public class SecurityConfig  {
 
     }
 
-    @Bean
-    public Service twilioService() {
-
-        Twilio.init(accountSid, authToken);
-        ResourceSet<Service> services = Service.reader().read();
-        for (Service service : services) {
-            if (service.getFriendlyName().equals(serviceName)){
-                System.out.println("Service found: " + serviceName + " with SID: " + service.getSid());
-                return Service.fetcher(service.getSid()).fetch();
-            }
-        }
-
-
-        // Create a new service if it doesn't exist
-        Service newService = Service.creator(serviceName).create();
-        String serviceSid = newService.getSid();
-        System.out.println("Service created: " + serviceName + " with SID: " + serviceSid);
-        return Service.fetcher(serviceSid).fetch();
+    private CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(List.of("*"));
+        configuration.setAllowedMethods(List.of("*"));
+        configuration.setAllowedHeaders(List.of("*"));
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
     }
+
+//    @Bean
+//    public Service twilioService() {
+//
+//        Twilio.init(accountSid, authToken);
+//        ResourceSet<Service> services = Service.reader().read();
+//        for (Service service : services) {
+//            if (service.getFriendlyName().equals(serviceName)){
+//                System.out.println("Service found: " + serviceName + " with SID: " + service.getSid());
+//                return Service.fetcher(service.getSid()).fetch();
+//            }
+//        }
+//
+//
+//        // Create a new service if it doesn't exist
+//        Service newService = Service.creator(serviceName).create();
+//        String serviceSid = newService.getSid();
+//        System.out.println("Service created: " + serviceName + " with SID: " + serviceSid);
+//        return Service.fetcher(serviceSid).fetch();
+//    }
 
 }

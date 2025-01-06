@@ -3,29 +3,34 @@ package com.smart_vehicle.controller;
 import com.smart_vehicle.Service.AdminService;
 import com.smart_vehicle.models.Admin;
 import com.smart_vehicle.models.Route;
+import com.smart_vehicle.models.User;
+import com.smart_vehicle.payload.request.VerifyOTPRequest;
+import com.smart_vehicle.payload.response.ErrorResponse;
+import com.smart_vehicle.payload.response.JwtResponse;
 import com.smart_vehicle.repository.AdminRepository;
+import jakarta.validation.Valid;
 import org.apache.coyote.BadRequestException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.CrossOrigin;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
-@CrossOrigin(origins = "*", maxAge = 3600)
 @RestController
-@RequestMapping("/api/admin")
+@RequestMapping("/api/v1/admin")
 public class AdminController {
     @Autowired
     AdminRepository adminRepository;
 
     @Autowired
     AdminService adminService;
+
+
 
     @GetMapping("routes")
     public ResponseEntity<?> getRoutes(Authentication authentication){

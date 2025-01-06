@@ -11,14 +11,13 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 
 import java.util.List;
 import java.util.Map;
 
-@CrossOrigin(origins = "*", maxAge = 3600)
+
 @RestController
-@RequestMapping("/api/parent")
+@RequestMapping("/api/v1/parent")
 public class ParentController {
     @Autowired
     private StudentService studentService;

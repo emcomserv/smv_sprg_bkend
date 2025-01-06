@@ -15,7 +15,9 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.util.StringUtils;
+import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.servlet.support.RequestContext;
 
 import java.io.IOException;
 import java.util.*;
@@ -35,6 +37,7 @@ public class AuthTokenFilter extends OncePerRequestFilter {
     try {
       String jwt = parseJwt(request);
       if (jwt != null && jwtUtils.validateJwtToken(jwt)) {
+        AuthTokenHolder.setAuthToken(jwt);
         String username = jwtUtils.getUserNameFromJwtToken(jwt);
         String userId = jwtUtils.getUserIdFromJwtToken(jwt);
         UserDetailsImpl userDetails = userDetailsService.loadUserByUsername(username);
@@ -49,6 +52,8 @@ public class AuthTokenFilter extends OncePerRequestFilter {
       }
     } catch (Exception e) {
       logger.error("Cannot set user authentication: {}", e);
+    }finally {
+      AuthTokenHolder.clear();
     }
 
     filterChain.doFilter(request, response);

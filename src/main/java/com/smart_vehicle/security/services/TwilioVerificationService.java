@@ -9,7 +9,7 @@ import org.springframework.stereotype.Service;
 @Service()
 public class TwilioVerificationService {
 
-    private final com.twilio.rest.verify.v2.Service twilioService;
+//    private final com.twilio.rest.verify.v2.Service twilioService;
     @Value("${twilio.account.sid}")
     private String accountSid;
 
@@ -18,11 +18,11 @@ public class TwilioVerificationService {
 
     private String serviceSid;
 
-    @Autowired
-    public TwilioVerificationService(com.twilio.rest.verify.v2.Service twilioService) {
-       this.twilioService = twilioService;
-       this.serviceSid = this.twilioService.getSid();
-    }
+//    @Autowired
+//    public TwilioVerificationService(com.twilio.rest.verify.v2.Service twilioService) {
+//       this.twilioService = twilioService;
+//       this.serviceSid = this.twilioService.getSid();
+//    }
 
     public String startVerification(String phoneNumber) {
         Verification verification = Verification.creator(
