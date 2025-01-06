@@ -1,10 +1,9 @@
 package com.smart_vehicle.security;
 
 
-import com.smart_vehicle.security.services.TwilioVerificationService;
-import com.twilio.Twilio;
-import com.twilio.base.ResourceSet;
-import com.twilio.rest.verify.v2.Service;
+//import com.twilio.Twilio;
+//import com.twilio.base.ResourceSet;
+//import com.twilio.rest.verify.v2.Service;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
