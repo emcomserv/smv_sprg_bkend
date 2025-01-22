@@ -4,8 +4,11 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.util.List;
+import java.util.Set;
+
 @Entity
-@Table(name = "smv_admin")
+@Table(name = "smv_admin_reg")
 @Getter
 @Setter
 public class Admin extends BaseEntity{
@@ -28,4 +31,11 @@ public class Admin extends BaseEntity{
     @OneToOne
     @JoinColumn(name = "user_id")
     private User user;
+
+    @Column(name = "sm_admin_id", length = 20)
+    private String smAdminId;
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(name = "smv_admin_route", joinColumns = @JoinColumn(name = "admin_id"), inverseJoinColumns = @JoinColumn(name = "route_id"))
+    private List<Route> routes;
 }

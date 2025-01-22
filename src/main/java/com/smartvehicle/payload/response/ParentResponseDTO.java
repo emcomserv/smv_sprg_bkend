@@ -11,5 +11,6 @@ public class ParentResponseDTO {
     private String firstName;
     private String lastName;
     private String countryCode;
-    private Long userId;
+    private UserResponseLtDTO user;
+    private String smParentId;
 }

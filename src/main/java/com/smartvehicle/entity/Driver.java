@@ -26,6 +26,9 @@ public class Driver extends BaseEntity{
     @OneToOne
     @JoinColumn(name = "user_id")
     private User user;
-
-
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "route_id", referencedColumnName = "id")
+    private Route route;
+    @Column(name = "sm_driver_id", length = 20)
+    private String smDriverId;
 }

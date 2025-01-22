@@ -1,0 +1,109 @@
+package com.smartvehicle.controller;
+
+import com.smartvehicle.Service.RouteService;
+import com.smartvehicle.Service.UserService;
+import com.smartvehicle.entity.*;
+import com.smartvehicle.mapper.StudentMapper;
+import com.smartvehicle.payload.request.StudentChangeRouteReq;
+import com.smartvehicle.payload.request.StudentPickupPointReq;
+import com.smartvehicle.payload.request.StudentSignupReq;
+import com.smartvehicle.payload.response.ErrorResponse;
+import com.smartvehicle.payload.response.SignupResponse;
+import com.smartvehicle.payload.response.StudentResponseDTO;
+import com.smartvehicle.repository.ParentRepository;
+import com.smartvehicle.repository.SchoolRepository;
+import com.smartvehicle.repository.StudentRepository;
+import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+
+@RestController
+@RequestMapping("/api/v1/student")
+public class StudentController {
+    @Autowired
+    private StudentRepository studentRepository;
+    @Autowired
+    private UserService userService;
+    @Autowired
+    private SchoolRepository schoolRepository;
+    @Autowired
+    private RouteService routeService;
+    @Autowired
+    private StudentMapper studentMapper;
+    @Autowired
+    private ParentRepository parentRepository;
+    @PostMapping("/register")
+    @Transactional
+    public ResponseEntity<?> registerUser(@Valid @RequestBody StudentSignupReq request) throws Exception{
+            School school = schoolRepository.findById(request.getSchoolId())
+                    .orElseThrow(() -> new RuntimeException("Error: School not found with id  "+request.getSchoolId()));
+            User user = userService.registerUser(request, UserType.STUDENT.name(),false);
+            Parent parent = parentRepository.findById(request.getParentId())
+                    .orElseThrow(() -> new RuntimeException("Error: Parent not found with id  "+request.getParentId()));
+            Student student = new Student();
+            student.setFirstName(request.getFirstName());
+            student.setLastName(request.getLastName());
+            student.setLongitude(request.getLongitude());
+            student.setAge(request.getAge());
+            student.setGender(request.getGender());
+            student.setLatitude(request.getLatitude());
+            student.setSchool(school);
+            student.setParent(parent);
+            student.setStatus(true);
+            if(request.getRouteId()!=null){
+                Route route = routeService.getRouteById(request.getRouteId());
+                student.setRoute(route);
+            }
+
+            studentRepository.save(student);
+//            SignupResponse response = new SignupResponse(request.getUsername(), request.getPhone());
+        StudentResponseDTO studentResponseDTO = studentMapper.toResponseDTO(student);
+            return new ResponseEntity<StudentResponseDTO>(studentResponseDTO, HttpStatus.CREATED);
+    }
+
+    @GetMapping
+    public ResponseEntity<List<StudentResponseDTO>> getAllStudents() {
+        List<Student> students = studentRepository.findAll();
+        List<StudentResponseDTO> studentResponseDTOS = studentMapper.toResponseDTO(students);
+        return ResponseEntity.ok(studentResponseDTOS);
+    }
+
+    /**
+     * Get a route by ID
+     */
+    @GetMapping("/route/{id}")
+    public ResponseEntity<List<StudentResponseDTO>> getByRouteId(@PathVariable Long id) {
+        List<Student> students = studentRepository.findByRoute_Id(id);
+        List<StudentResponseDTO> studentResponseDTOS = studentMapper.toResponseDTO(students);
+        return ResponseEntity.ok(studentResponseDTOS);
+    }
+    @PostMapping("/{id}/change-routepoint")
+    public ResponseEntity<StudentResponseDTO> changeRoutePoint(@PathVariable Long id,
+                                                                     @RequestBody StudentPickupPointReq req) {
+        Student student = studentRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Error: Student not found with id  "+id));
+        student.setLatitude(req.getLatitude());
+        student.setLongitude(req.getLongitude());
+        studentRepository.save(student);
+        StudentResponseDTO studentResponseDTO = studentMapper.toResponseDTO(student);
+        return ResponseEntity.ok(studentResponseDTO);
+    }
+
+    @PostMapping("/{studentId}/change-route")
+    public ResponseEntity<StudentResponseDTO> changeRoutePoint(@PathVariable Long studentId,
+                                                               @RequestBody StudentChangeRouteReq req) {
+        Student student = studentRepository.findById(studentId)
+                .orElseThrow(() -> new RuntimeException("Error: Student not found with id  "+studentId));
+        Route route = routeService.getRouteById(req.getRouteId());
+        student.setRoute(route);
+        studentRepository.save(student);
+        StudentResponseDTO studentResponseDTO = studentMapper.toResponseDTO(student);
+        return ResponseEntity.ok(studentResponseDTO);
+    }
+}

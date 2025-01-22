@@ -7,9 +7,11 @@ import lombok.Setter;
 @Setter
 public class DriverResponseDTO {
     private Long id;
-    private String schId;
     private String firstName;
     private String lastName;
-    private Long userId;
+    private UserResponseLtDTO user;
+    private Long routeId;
+    private String schoolId;
+    private String smDriverId;
 }
 

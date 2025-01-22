@@ -1,6 +1,6 @@
 package com.smartvehicle.entity;
 
-public enum ERole {
+public enum UserType {
     PARENT,
     DRIVER,
     ATTENDER,

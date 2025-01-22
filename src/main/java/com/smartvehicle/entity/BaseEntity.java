@@ -1,10 +1,16 @@
 package com.smartvehicle.entity;
 
-import jakarta.persistence.Column;
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.time.LocalDateTime;
+@Getter
+@Setter
+@MappedSuperclass
+@EntityListeners(AuditEntityListener.class)
+public abstract class BaseEntity {
 
-public class BaseEntity {
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
@@ -16,4 +22,14 @@ public class BaseEntity {
 
     @Column(name = "updated_by")
     private Long updatedBy;
+
+    @PrePersist
+    protected void onCreate() {
+        this.createdAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedAt = LocalDateTime.now();
+    }
 }

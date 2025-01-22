@@ -1,8 +1,10 @@
 package com.smartvehicle.controller;
 
 import com.smartvehicle.entity.User;
+import com.smartvehicle.mapper.UserMapper;
 import com.smartvehicle.payload.request.VerifyOTPRequest;
 import com.smartvehicle.payload.response.ErrorResponse;
+import com.smartvehicle.payload.response.UserResponseLtDTO;
 import com.smartvehicle.repository.UserRepository;
 import com.smartvehicle.security.services.TwilioVerificationService;
 import jakarta.validation.Valid;
@@ -15,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @RestController
@@ -27,29 +30,36 @@ public class OTPController {
     @Autowired
     private TwilioVerificationService twilioVerificationService;
 
+    @Autowired
+    private UserMapper userMapper;
+//    private final ConcurrentHashMap<String, Long> activeRequests = new ConcurrentHashMap<>();
+
     @PostMapping("/verify")
     public ResponseEntity<?> authenticateOTP(@Valid @RequestBody VerifyOTPRequest request) {
-        System.out.println("OTP "+request.getOtp()+" User name "+request.getUsername());
+        System.out.println("OTP "+request.getOtp()+" User name "+request.getUsername() );
+        String requestKey = request.getUsername() + ":" + request.getOtp();
 
-        try {
+//        // Check for duplicate requests
+//        if (activeRequests.putIfAbsent(requestKey, System.currentTimeMillis()) != null) {
+//            log.warn("Duplicate request detected for key: {}", requestKey);
+//            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+//                    .body(new ErrorResponse("SMV Duplicate request detected", HttpStatus.TOO_MANY_REQUESTS));
+//        }
             User user = userRepository.findByUsername(request.getUsername())
                     .orElseThrow(() -> new RuntimeException("Invalid Request : No such Username found"));
             String status = twilioVerificationService.checkVerification(user.getPhone(), request.getOtp());
+            log.info("OTP verification  User name {} status {} ",request.getUsername(),status);
             if (status.equals("approved")) {
                 return ResponseEntity
-                        .ok(status);
+                        .ok(userMapper.toResponseLtDTO(user));
             }
             return new ResponseEntity<ErrorResponse>(new ErrorResponse("OTP validation failed!",
                     HttpStatus.UNAUTHORIZED), HttpStatus.UNAUTHORIZED);
-        } catch (Exception error) {
-            log.error(error.getMessage());
-            return new ResponseEntity<ErrorResponse>(new ErrorResponse(error.getMessage(),
-                    HttpStatus.UNAUTHORIZED), HttpStatus.UNAUTHORIZED);
-        }
+
     }
 
     @PostMapping("/resend")
-    public String resendOTP(Authentication authentication) {
+    public ResponseEntity<?> resendOTP(Authentication authentication) {
         if (authentication == null || !(authentication.getDetails() instanceof Map)) {
             throw new RuntimeException("Unauthorised User");
         }
@@ -57,8 +67,9 @@ public class OTPController {
         Long userId = (Long) details.get("userId");
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Invalid Request : No such Username found"));
-        return twilioVerificationService.startVerification(user.getPhone());
-
+        String status= twilioVerificationService.startVerification(user.getPhone());
+        return ResponseEntity
+                .ok(userMapper.toResponseLtDTO(user));
     }
 
 }

@@ -4,15 +4,13 @@ import com.smartvehicle.entity.*;
 import com.smartvehicle.payload.request.LoginRequest;
 import com.smartvehicle.payload.request.ResetPasswordRequest;
 import com.smartvehicle.payload.request.SignupRequest;
-import com.smartvehicle.payload.response.ErrorResponse;
-import com.smartvehicle.payload.response.JwtResponse;
-import com.smartvehicle.payload.response.MessageResponse;
-import com.smartvehicle.payload.response.SignupResponse;
-import com.smartvehicle.repository.RoleRepository;
-import com.smartvehicle.repository.UserRepository;
+import com.smartvehicle.payload.response.*;
+import com.smartvehicle.repository.*;
+import com.smartvehicle.security.jwt.CustomRequestContextHolder;
 import com.smartvehicle.security.jwt.JwtUtils;
 import com.smartvehicle.security.services.TwilioVerificationService;
 import com.smartvehicle.security.services.UserDetailsImpl;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,6 +20,8 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.util.CollectionUtils;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 
@@ -37,8 +37,8 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/auth")
+@Slf4j
 public class AuthController {
-    private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
     @Autowired
     AuthenticationManager authenticationManager;
 
@@ -55,7 +55,14 @@ public class AuthController {
     RoleRepository roleRepository;
     @Autowired
     private TwilioVerificationService twilioVerificationService;
-
+    @Autowired
+    private ParentRepository parentRepository;
+    @Autowired
+    private DriverRepository driverRepository;
+    @Autowired
+    private AttenderRepository attenderRepository;
+    @Autowired
+    private AdminRepository adminRepository;
     /**
      * Authenticates the user with the provided login credentials.
      *
@@ -80,9 +87,55 @@ public class AuthController {
                 throw new RuntimeException("Failed verification service");
             }
         }
+        try {
+            if (StringUtils.hasText(CustomRequestContextHolder.getDeviceType())
+                    && CustomRequestContextHolder.getDeviceType().equalsIgnoreCase(ClientType.MOBILE.name())
+                    && StringUtils.hasText(CustomRequestContextHolder.getDeviceToken())) {
+                log.debug("Saving device token for user {} ",loginRequest.getUserName());
+                user.setDeviceToken(CustomRequestContextHolder.getDeviceToken());
+                userRepository.save(user);
+            }
+        }catch (Exception e){
+            log.error("Failed for saving device token for user {} ",e.getMessage());
+        }
+        UserEntityResDTO entityObj=new UserEntityResDTO();
+        try {
+            if (!CollectionUtils.isEmpty(roles)) {
+                String role = roles.get(0).toUpperCase();
+                switch (role) {
+                    case "PARENT":
+                        Parent parent = parentRepository.findByUser_Id(user.getId());
+                        entityObj.setId(parent.getId());
+                        entityObj.setFirstName(parent.getFirstName());
+                        entityObj.setLastName(parent.getLastName());
+                        break;
+                    case "DRIVER":
+                        Driver driver = driverRepository.findByUser_Id(user.getId()).get();
+                        entityObj.setId(driver.getId());
+                        entityObj.setFirstName(driver.getFirstName());
+                        entityObj.setLastName(driver.getLastName());
+                        break;
+                    case "ATTENDEE":
+                        Attender attender = attenderRepository.findByUser_Id(user.getId()).get();
+                        entityObj.setId(attender.getId());
+                        entityObj.setFirstName(attender.getFirstName());
+                        entityObj.setLastName(attender.getLastName());
+                        break;
+                    case "ADMIN":
+                        Admin admin = adminRepository.findByUser_Id(user.getId()).get();
+                        entityObj.setId(admin.getId());
+                        entityObj.setFirstName(admin.getFirstName());
+                        entityObj.setLastName(admin.getLastName());
+                        break;
+                    default:
+                }
+            }
+        }catch (Exception e){
+            log.error("failed to get entity id {} ",e.getMessage());
+        }
 
         return ResponseEntity
-                .ok(new JwtResponse(jwt, userDetails.getId(),userDetails.getUsername(),user.getTwoFactorEnabled(),roles));
+                .ok(new JwtResponse(jwt, userDetails.getId(),userDetails.getUsername(),user.getTwoFactorEnabled(),roles,entityObj));
     }
     @PostMapping("/resetpassword")
     public ResponseEntity<?> getStudents(Authentication authentication,

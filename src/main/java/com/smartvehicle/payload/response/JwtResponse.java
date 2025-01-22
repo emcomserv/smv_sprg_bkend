@@ -19,4 +19,5 @@ public class JwtResponse {
   private Boolean twoFactorAuthentication;
 
   private List<String> roles;
+  private UserEntityResDTO entityObj;
 }

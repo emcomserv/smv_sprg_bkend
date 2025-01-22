@@ -1,16 +1,13 @@
 package com.smartvehicle.Service;
 
 
-import com.smartvehicle.entity.ERole;
 import com.smartvehicle.entity.Role;
 import com.smartvehicle.entity.User;
 import com.smartvehicle.payload.request.SignupRequest;
-import com.smartvehicle.payload.response.MessageResponse;
 import com.smartvehicle.repository.RoleRepository;
 import com.smartvehicle.repository.UserRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

@@ -42,4 +42,9 @@ public class Route extends BaseEntity{
     @ManyToOne
     @JoinColumn(name = "sch_id", referencedColumnName = "id")
     private School school;
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(name = "smv_admin_route", joinColumns = @JoinColumn(name = "route_id"),
+            inverseJoinColumns = @JoinColumn(name = "admin_id"))
+    private List<Admin> admins;
 }

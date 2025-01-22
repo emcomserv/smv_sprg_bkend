@@ -40,6 +40,8 @@ public class User  {
 
     @Column(name = "status")
     private Boolean status;
+    @Column(name = "device_token")
+    private String deviceToken;
 
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(name = "smv_user_role", joinColumns = @JoinColumn(name = "user_id"), inverseJoinColumns = @JoinColumn(name = "role_id"))

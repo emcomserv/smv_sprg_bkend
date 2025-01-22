@@ -139,8 +139,6 @@ public class SecurityConfig  {
                 return Service.fetcher(service.getSid()).fetch();
             }
         }
-
-
         // Create a new service if it doesn't exist
         Service newService = Service.creator(serviceName).create();
         String serviceSid = newService.getSid();

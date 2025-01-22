@@ -5,7 +5,10 @@ import com.smartvehicle.Service.UserService;
 import com.smartvehicle.entity.*;
 import com.smartvehicle.mapper.SchoolMapper;
 import com.smartvehicle.payload.request.ParentSignupReq;
+import com.smartvehicle.payload.request.SchoolRegistrationReq;
+import com.smartvehicle.payload.request.StudentSignupReq;
 import com.smartvehicle.payload.response.ErrorResponse;
+import com.smartvehicle.payload.response.SchoolRegistrationResponse;
 import com.smartvehicle.payload.response.SchoolResponseDTO;
 import com.smartvehicle.payload.response.SignupResponse;
 import com.smartvehicle.repository.ParentRepository;
@@ -17,6 +20,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
@@ -46,6 +50,37 @@ public class SchoolController {
 
     @Autowired
     private SchoolMapper schoolMapper;
+
+    @PostMapping("/register")
+    @Transactional
+    public ResponseEntity<SchoolRegistrationResponse> registerSchool(@RequestBody SchoolRegistrationReq request) {
+        System.out.println(request.getSchoolId());
+
+        if (schoolRepository.existsById(request.getSchoolId())) {
+            throw new RuntimeException("Error: A school with this Id already exists "+request.getSchoolId());
+        }
+        if (schoolRepository.existsByName(request.getName())) {
+            throw new RuntimeException("Error: A school with this name already exists.");
+        }
+        // Create and save the School entity
+        School school = new School();
+        school.setId(request.getSchoolId());
+        school.setName(request.getName());
+        school.setCountryId(request.getCountryId());
+        school.setProvId(request.getProvId());
+        school.setAreaId(request.getAreaId());
+        school.setEntityId(request.getEntityId());
+        school.setContactName(request.getContactName());
+        school.setContactNum(request.getContactNum());
+        school.setStatus(request.getStatus());
+        schoolRepository.save(school);
+
+        // Return a response DTO
+        SchoolRegistrationResponse response = new SchoolRegistrationResponse(school.getId(), school.getName(), school.getContactName(), school.getContactNum());
+        return new ResponseEntity<>(response, HttpStatus.CREATED);
+    }
+
+
     @GetMapping("/{id}")
     public ResponseEntity<?> getSchool(@PathVariable(required = true) String id) {
         List<SchoolResponseDTO> schoolResponseDTOS=new ArrayList<>();
@@ -66,6 +101,17 @@ public class SchoolController {
     public ResponseEntity<?> getSchools() {
         List<SchoolResponseDTO> schoolResponseDTOS=new ArrayList<>();
             List<School> schools =schoolRepository.findAll();
+            schoolResponseDTOS= schools.stream()
+                    .map(s-> schoolMapper.toResponseDTO(s)).collect(Collectors.toList());
+
+        return ResponseEntity.ok(schoolResponseDTOS);
+    }
+
+    @GetMapping("/admin/{adminId}")
+    public ResponseEntity<?> getSchoolByAdminId(@PathVariable(required = true) Long adminId) {
+        List<SchoolResponseDTO> schoolResponseDTOS=new ArrayList<>();
+
+            List<School> schools =schoolRepository.findByAdmin_Id(adminId);
             schoolResponseDTOS= schools.stream()
                     .map(s-> schoolMapper.toResponseDTO(s)).collect(Collectors.toList());
 

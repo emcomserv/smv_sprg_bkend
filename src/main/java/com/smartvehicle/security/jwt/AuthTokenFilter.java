@@ -47,14 +47,16 @@ public class AuthTokenFilter extends OncePerRequestFilter {
                 additionalDetails.put("userId", userId);
                 authentication.setDetails(additionalDetails);
                 SecurityContextHolder.getContext().setAuthentication(authentication);
+                System.out.println("filter setting user id "+userId);
+                CustomRequestContextHolder.setUserID(userId);
             }
         } catch (Exception e) {
             logger.error("Cannot set user authentication: {}", e);
-        } finally {
             CustomRequestContextHolder.clear();
         }
 
         filterChain.doFilter(request, response);
+        CustomRequestContextHolder.clear();
     }
 
     private String parseJwt(HttpServletRequest request) {
@@ -68,8 +70,12 @@ public class AuthTokenFilter extends OncePerRequestFilter {
     }
     private void setDeviceType(HttpServletRequest request) {
         String clientType = request.getHeader("Client-Type");
+        String deviceToken = request.getHeader("Device-Token");
         if (StringUtils.hasText(clientType) ) {
             CustomRequestContextHolder.setDeviceType(clientType);
+        }
+        if (StringUtils.hasText(deviceToken) ) {
+            CustomRequestContextHolder.setDeviceToken(deviceToken);
         }
     }
 }

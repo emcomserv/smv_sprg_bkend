@@ -32,6 +32,7 @@ public class Parent extends BaseEntity{
     @ManyToOne
     @JoinColumn(name = "sch_id", referencedColumnName = "id")
     private School school;
-
+    @Column(name = "sm_parent_id", length = 20)
+    private String smParentId;
 }
 
