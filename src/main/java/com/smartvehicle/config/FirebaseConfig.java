@@ -5,31 +5,26 @@ import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
-@Configuration
+@Component
 public class FirebaseConfig {
 
-//    @PostConstruct
+    @PostConstruct
     public void initializeFirebase() throws IOException {
-
-        // Use ClassPathResource to get the file
         ClassPathResource resource = new ClassPathResource("trakme-6ea58-cb7061e0641c.json");
-// Convert to FileInputStream
         try (InputStream inputStream = resource.getInputStream()) {
-            FileInputStream serviceAccount = (FileInputStream) inputStream;
-
-            // Pass this input stream to your Firebase initialization code
             FirebaseOptions options = FirebaseOptions.builder()
-                    .setCredentials(GoogleCredentials.fromStream(serviceAccount))
+                    .setCredentials(GoogleCredentials.fromStream(inputStream))
                     .build();
-
             FirebaseApp.initializeApp(options);
         }
     }
 }
+
 

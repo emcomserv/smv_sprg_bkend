@@ -20,6 +20,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
@@ -70,6 +71,7 @@ public class AuthController {
      * @return A ResponseEntity containing the JWT token and user details if authentication is successful.
      */
     @PostMapping("/signin")
+    @Transactional
     public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
         User user = userRepository.findByUsername(loginRequest.getUserName())
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -115,7 +117,7 @@ public class AuthController {
                         entityObj.setFirstName(driver.getFirstName());
                         entityObj.setLastName(driver.getLastName());
                         break;
-                    case "ATTENDEE":
+                    case "ATTENDER":
                         Attender attender = attenderRepository.findByUser_Id(user.getId()).get();
                         entityObj.setId(attender.getId());
                         entityObj.setFirstName(attender.getFirstName());

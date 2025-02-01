@@ -1,7 +1,8 @@
-package com.smartvehicle.Service;
+package com.smartvehicle.service;
 
 import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.messaging.Message;
+import com.google.firebase.messaging.Notification;
 import com.smartvehicle.entity.Alert;
 import com.smartvehicle.entity.User;
 import com.smartvehicle.payload.request.AlertReq;
@@ -11,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 @Service
 @Slf4j
@@ -32,10 +34,14 @@ public class AlertsService {
             alert.setBody(alertReq.getBody());
             alert.setAlertType(alertReq.getAlertType());
             alertRepository.save(alert);
-
-            log.debug(" Sending notification via Firebase");
+            Notification notification = Notification.builder()
+                    .setTitle(alert.getTitle()) /// from user name
+                    .setBody(alert.getBody())  //
+                    .build();
+            log.debug(" Sending notification via Firebase to User {} ",user.getId());
             Message message = Message.builder()
                     .setToken(user.getDeviceToken())
+                    .setNotification(notification)
                     .putData("title", alert.getTitle())
                     .putData("body", alert.getBody())
                     .putData("alertType", alert.getAlertType())
@@ -43,13 +49,18 @@ public class AlertsService {
                     .putData("fromUserPhone", fromUser.getPhone())
                     .build();
 
-            FirebaseMessaging.getInstance().send(message);
-            System.out.println("Alert sent successfully!");
+//            FirebaseMessaging.getInstance().send(message);
+            String response = sendAndGetResponse(message);
+            System.out.println("Alert sent successfully! "+response);
         } catch (Exception e) {
             e.printStackTrace();
             System.err.println("Failed to send alert: " + e.getMessage());
         }
         return alert;
+    }
+
+    private String sendAndGetResponse(Message message) throws InterruptedException, ExecutionException {
+        return FirebaseMessaging.getInstance().sendAsync(message).get();
     }
     public Alert update(User user, AlertReq alertReq) {
         Alert alert = null;

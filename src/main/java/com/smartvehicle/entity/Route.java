@@ -32,7 +32,7 @@ public class Route extends BaseEntity{
     @Column(name = "reserve")
     private Integer reserve;
 
-    @Column(name = "sm_route_id", length = 20)
+    @Column(name = "sm_route_id")
     private String smRouteId;
 
     @Column(name = "content", length = 255)

@@ -40,6 +40,7 @@ public class RoutePoint extends BaseEntity{
 
     @Column(name = "content")
     private String content;
-
+    @Column(name = "sm_route_point_id")
+    private String smRoutePointId;
 
 }

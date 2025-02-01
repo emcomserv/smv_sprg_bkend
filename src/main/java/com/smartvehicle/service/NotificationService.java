@@ -1,4 +1,4 @@
-package com.smartvehicle.Service;
+package com.smartvehicle.service;
 
 import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.messaging.Message;

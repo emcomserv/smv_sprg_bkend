@@ -1,7 +1,6 @@
 package com.smartvehicle.controller;
 
-import com.smartvehicle.Service.AlertsService;
-import com.smartvehicle.Service.UserService;
+import com.smartvehicle.service.AlertsService;
 import com.smartvehicle.entity.Alert;
 import com.smartvehicle.entity.User;
 import com.smartvehicle.payload.request.AlertReq;

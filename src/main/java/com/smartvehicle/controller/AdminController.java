@@ -1,13 +1,12 @@
 package com.smartvehicle.controller;
 
-import com.smartvehicle.Service.AdminService;
-import com.smartvehicle.Service.RouteService;
-import com.smartvehicle.Service.UserService;
+import com.smartvehicle.service.AdminService;
+import com.smartvehicle.service.RouteService;
+import com.smartvehicle.service.UserService;
 import com.smartvehicle.entity.*;
 import com.smartvehicle.mapper.AdminMapper;
 import com.smartvehicle.payload.request.AdminSignupReq;
 import com.smartvehicle.payload.response.AdminResponseDTO;
-import com.smartvehicle.payload.response.ErrorResponse;
 import com.smartvehicle.payload.response.SignupResponse;
 import com.smartvehicle.repository.AdminRepository;
 import com.smartvehicle.repository.SchoolRepository;

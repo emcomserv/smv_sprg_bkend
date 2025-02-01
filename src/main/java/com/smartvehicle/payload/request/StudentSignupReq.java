@@ -13,4 +13,5 @@ public class StudentSignupReq extends SignupRequest{
     private String smStudentId;
     private String latitude;
     private String longitude;
+    private Long routePointId;
 }

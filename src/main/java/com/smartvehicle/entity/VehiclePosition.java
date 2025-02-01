@@ -53,4 +53,7 @@ public class VehiclePosition {
 
     @Column(name = "title", length = 255)
     private String title;
+
+    @Column(name = "sm_prev_route_point_id")
+    private String smPrevRoutePointId;
 }

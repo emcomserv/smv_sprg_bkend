@@ -1,12 +1,11 @@
 package com.smartvehicle.controller;
 
-import com.smartvehicle.Service.RouteService;
-import com.smartvehicle.Service.UserService;
+import com.smartvehicle.service.RouteService;
+import com.smartvehicle.service.UserService;
 import com.smartvehicle.entity.*;
 import com.smartvehicle.mapper.AttenderMapper;
 import com.smartvehicle.payload.request.AttenderSignupReq;
 import com.smartvehicle.payload.response.AttenderResponseDTO;
-import com.smartvehicle.payload.response.ErrorResponse;
 import com.smartvehicle.payload.response.SignupResponse;
 import com.smartvehicle.repository.AttenderRepository;
 import com.smartvehicle.repository.SchoolRepository;
@@ -69,5 +68,13 @@ public class AttenderController {
         return ResponseEntity.ok(attenderResponseDTO);
     }
 
+
+    @GetMapping("/{id}")
+    public ResponseEntity<AttenderResponseDTO> getById(@PathVariable Long id) {
+        Attender attender = attenderRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Error: Attender not found with id  "+id));
+        AttenderResponseDTO attenderResponseDTO = attenderMapper.toResponseDTO(attender);
+        return ResponseEntity.ok(attenderResponseDTO);
+    }
 
 }

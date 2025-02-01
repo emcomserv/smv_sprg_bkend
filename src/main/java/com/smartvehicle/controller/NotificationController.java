@@ -1,6 +1,6 @@
 package com.smartvehicle.controller;
 
-import com.smartvehicle.Service.NotificationService;
+import com.smartvehicle.service.NotificationService;
 import com.smartvehicle.payload.request.NotificationReq;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;

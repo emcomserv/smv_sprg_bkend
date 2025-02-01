@@ -1,20 +1,30 @@
-package com.smartvehicle.Service;
+package com.smartvehicle.service;
 
 
+import com.smartvehicle.entity.PassengerInfo;
 import com.smartvehicle.entity.Route;
 import com.smartvehicle.entity.RoutePoint;
 import com.smartvehicle.entity.School;
+import com.smartvehicle.exception.ApplicationException;
+import com.smartvehicle.mapper.PassengerInfoMapper;
+import com.smartvehicle.payload.request.PassengerInfoRequest;
 import com.smartvehicle.payload.request.RoutePointRegistrationReq;
 import com.smartvehicle.payload.request.RouteRegistrationReq;
+import com.smartvehicle.payload.response.PassengerInfoDTO;
+import com.smartvehicle.payload.response.PassengerInfoResponse;
 import com.smartvehicle.payload.response.RoutePointResponseDTO;
 import com.smartvehicle.payload.response.RouteRegResDTO;
+import com.smartvehicle.repository.PassengerInfoRepository;
 import com.smartvehicle.repository.RoutePointRepository;
 import com.smartvehicle.repository.RouteRepository;
 import com.smartvehicle.repository.SchoolRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 @Service
@@ -25,7 +35,10 @@ public class RouteService {
 
     @Autowired
     private RoutePointRepository routePointRepository;
-
+    @Autowired
+    private PassengerInfoRepository passengerInfoRepository;
+    @Autowired
+    private PassengerInfoMapper passengerInfoMapper;
     @Autowired
     private SchoolRepository schoolRepository;
     @Transactional
@@ -55,6 +68,13 @@ public class RouteService {
         return routeRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Route not found with ID: " + id));
     }
+    public Integer getRouteStudentCountById(Long id) {
+        return routeRepository.findRouteStudentCountById(id);
+    }
+    public RoutePoint getRoutePointById(Long id) {
+        return routePointRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("RoutePoint not found with ID: " + id));
+    }
     public Route getRouteBySmId(String id) {
         return routeRepository.findBySmRouteId(id)
                 .orElseThrow(() -> new RuntimeException("Route not found with SmRouteId: " + id));
@@ -63,16 +83,21 @@ public class RouteService {
     public List<Route> getRoutesByAdminId(Long adminId) {
         return routeRepository.findRouteByAdminId(adminId);
     }
+    public List<Route> getRoutesBySchoolId(String schoolId) {
+        return routeRepository.findRouteBySchoolId(schoolId);
+    }
 
     public List<Route> getRoutesBySMAdminId(String smAdminId) {
         return routeRepository.findBySMRoute_Id(smAdminId);
     }
 
 
-
+    public List<PassengerInfoResponse> getAllPassengerInfo() {
+        return passengerInfoRepository.fetchPassengerInfo();
+    }
 
     @Transactional
-    public RoutePointResponseDTO registerRoutePoint(RoutePointRegistrationReq request) {
+    public RoutePoint registerRoutePoint(RoutePointRegistrationReq request) {
         // Validate if the route exists
         Route route = routeRepository.findById(request.getRouteId())
                 .orElseThrow(() -> new RuntimeException("Error: Route not found with ID " + request.getRouteId()));
@@ -96,18 +121,29 @@ public class RouteService {
         routePointRepository.save(routePoint);
 
         // Return a response DTO
-        return new RoutePointResponseDTO(
-                routePoint.getId(),
-                routePoint.getSeqOrder(),
-                routePoint.getRoutePointName(),
-                routePoint.getTitle(),
-                routePoint.getLatitude(),
-                routePoint.getLongitude(),
-                routePoint.getStatus(),
-                routePoint.getReserve(),
-                routePoint.getContent()
-        );
+        return routePoint;
     }
 
 
+    public PassengerInfoDTO addPassengerInfo(PassengerInfoRequest request) {
+
+        boolean isExist = passengerInfoRepository.existsBySmRoutePointIdAndSmStudentId(request.getSmRoutePointId(),request.getSmStudentId());
+        if (isExist){
+          throw new ApplicationException("Student already boarded for this Route");
+        }
+
+        PassengerInfo passengerInfo = new PassengerInfo();
+        passengerInfo.setSmRouteId(request.getSmRouteId());
+        passengerInfo.setSmRoutePointId(request.getSmRoutePointId());
+        passengerInfo.setSmStudentId(request.getSmStudentId());
+        passengerInfo.setCreatedAt(LocalDateTime.now());
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd-MM-yyyy");
+        passengerInfo.setDate(LocalDateTime.now().format(formatter));
+        passengerInfoRepository.save(passengerInfo);
+        return passengerInfoMapper.toDTO(passengerInfo);
+    }
+
+    public List<PassengerInfoResponse> getAllPassengerInfo(String smRoutePointId) {
+        return passengerInfoRepository.fetchPassengerInfo(smRoutePointId);
+    }
 }

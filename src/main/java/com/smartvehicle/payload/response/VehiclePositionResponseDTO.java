@@ -18,5 +18,6 @@ public class VehiclePositionResponseDTO {
     private String reserve;
     private String content;
     private String title;
+    private String smPrevRoutePointId;
 }
 

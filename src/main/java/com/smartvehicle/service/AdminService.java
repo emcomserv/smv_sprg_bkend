@@ -1,4 +1,4 @@
-package com.smartvehicle.Service;
+package com.smartvehicle.service;
 
 import com.smartvehicle.entity.Route;
 import com.smartvehicle.repository.RouteRepository;

@@ -52,6 +52,8 @@ public class Student extends BaseEntity{
 
     @Column(name = "longitude")
     private String longitude;
-
+    @OneToOne
+    @JoinColumn(name = "route_point_id")
+    private RoutePoint routePoint;
 
 }

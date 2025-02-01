@@ -1,11 +1,10 @@
 package com.smartvehicle.controller;
 
-import com.smartvehicle.Service.StudentService;
-import com.smartvehicle.Service.UserService;
+import com.smartvehicle.service.StudentService;
+import com.smartvehicle.service.UserService;
 import com.smartvehicle.entity.*;
 import com.smartvehicle.mapper.StudentMapper;
 import com.smartvehicle.payload.request.ParentSignupReq;
-import com.smartvehicle.payload.response.ErrorResponse;
 import com.smartvehicle.payload.response.SignupResponse;
 import com.smartvehicle.repository.ParentRepository;
 import com.smartvehicle.repository.SchoolRepository;

@@ -1,4 +1,4 @@
-package com.smartvehicle.Service;
+package com.smartvehicle.service;
 
 import com.smartvehicle.entity.Student;
 import com.smartvehicle.repository.StudentRepository;
@@ -13,6 +13,6 @@ public class StudentService {
     private StudentRepository studentRepository;
 
     public List<Student> findStudentsByParentId(Long parentId) {
-        return studentRepository.findByParent_Id(parentId);
+        return studentRepository.findAllByParent_Id(parentId);
     }
 }

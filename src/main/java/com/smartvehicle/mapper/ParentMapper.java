@@ -7,5 +7,7 @@ import org.mapstruct.Mapper;
 @Mapper(componentModel = "spring", uses = {UserMapper.class})
 public interface ParentMapper {
     ParentResponseDTO toResponseDTO(Parent parent);
+
+
 }
 

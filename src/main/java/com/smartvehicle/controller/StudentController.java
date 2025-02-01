@@ -1,15 +1,14 @@
 package com.smartvehicle.controller;
 
-import com.smartvehicle.Service.RouteService;
-import com.smartvehicle.Service.UserService;
+import com.smartvehicle.service.RouteService;
+import com.smartvehicle.service.UserService;
 import com.smartvehicle.entity.*;
 import com.smartvehicle.mapper.StudentMapper;
 import com.smartvehicle.payload.request.StudentChangeRouteReq;
 import com.smartvehicle.payload.request.StudentPickupPointReq;
 import com.smartvehicle.payload.request.StudentSignupReq;
-import com.smartvehicle.payload.response.ErrorResponse;
-import com.smartvehicle.payload.response.SignupResponse;
 import com.smartvehicle.payload.response.StudentResponseDTO;
+import com.smartvehicle.payload.response.StudentResponseLtDTO;
 import com.smartvehicle.repository.ParentRepository;
 import com.smartvehicle.repository.SchoolRepository;
 import com.smartvehicle.repository.StudentRepository;
@@ -59,6 +58,10 @@ public class StudentController {
             if(request.getRouteId()!=null){
                 Route route = routeService.getRouteById(request.getRouteId());
                 student.setRoute(route);
+                if(request.getRoutePointId()!=null){
+                    RoutePoint routePoint = routeService.getRoutePointById(request.getRoutePointId());
+                    student.setRoutePoint(routePoint);
+                }
             }
 
             studentRepository.save(student);
@@ -79,8 +82,14 @@ public class StudentController {
      */
     @GetMapping("/route/{id}")
     public ResponseEntity<List<StudentResponseDTO>> getByRouteId(@PathVariable Long id) {
-        List<Student> students = studentRepository.findByRoute_Id(id);
+        List<Student> students = studentRepository.findAllByRoute_Id(id);
         List<StudentResponseDTO> studentResponseDTOS = studentMapper.toResponseDTO(students);
+        return ResponseEntity.ok(studentResponseDTOS);
+    }
+    @GetMapping("/route-point/{id}")
+    public ResponseEntity<List<StudentResponseLtDTO>> getAllStudentByRoutePointId(@PathVariable Long id) {
+        List<Student> students = studentRepository.findAllByRoutePoint_Id(id);
+        List<StudentResponseLtDTO> studentResponseDTOS = studentMapper.toResponseLtDTO(students);
         return ResponseEntity.ok(studentResponseDTOS);
     }
     @PostMapping("/{id}/change-routepoint")

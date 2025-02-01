@@ -1,32 +1,24 @@
 package com.smartvehicle.controller;
 
-import com.smartvehicle.Service.StudentService;
-import com.smartvehicle.Service.UserService;
+import com.smartvehicle.service.StudentService;
+import com.smartvehicle.service.UserService;
 import com.smartvehicle.entity.*;
 import com.smartvehicle.mapper.SchoolMapper;
-import com.smartvehicle.payload.request.ParentSignupReq;
 import com.smartvehicle.payload.request.SchoolRegistrationReq;
-import com.smartvehicle.payload.request.StudentSignupReq;
-import com.smartvehicle.payload.response.ErrorResponse;
 import com.smartvehicle.payload.response.SchoolRegistrationResponse;
 import com.smartvehicle.payload.response.SchoolResponseDTO;
-import com.smartvehicle.payload.response.SignupResponse;
 import com.smartvehicle.repository.ParentRepository;
 import com.smartvehicle.repository.SchoolRepository;
 import com.smartvehicle.security.jwt.JwtUtils;
-import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 

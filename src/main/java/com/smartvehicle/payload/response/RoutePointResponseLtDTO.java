@@ -7,17 +7,12 @@ import lombok.Setter;
 @Getter
 @Setter
 @AllArgsConstructor
-public class RoutePointResponseDTO {
+public class RoutePointResponseLtDTO {
     private Long id;
     private Integer seqOrder;
-//    private Long routeId;
     private String routePointName;
-    private String title;
     private String latitude;
     private String longitude;
-    private Boolean status;
-    private String reserve;
-    private String content;
-    private String smRoutePointId;
+
 }
 

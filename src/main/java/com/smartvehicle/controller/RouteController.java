@@ -1,30 +1,20 @@
 package com.smartvehicle.controller;
 
-import com.smartvehicle.Service.RouteService;
-import com.smartvehicle.Service.StudentService;
-import com.smartvehicle.Service.UserService;
+import com.smartvehicle.mapper.RoutePointMapper;
+import com.smartvehicle.payload.request.PassengerInfoRequest;
+import com.smartvehicle.service.RouteService;
 import com.smartvehicle.entity.*;
 import com.smartvehicle.mapper.RouteMapper;
-import com.smartvehicle.mapper.StudentMapper;
-import com.smartvehicle.payload.request.ParentSignupReq;
 import com.smartvehicle.payload.request.RoutePointRegistrationReq;
 import com.smartvehicle.payload.request.RouteRegistrationReq;
-import com.smartvehicle.payload.request.SchoolRegistrationReq;
 import com.smartvehicle.payload.response.*;
-import com.smartvehicle.repository.ParentRepository;
-import com.smartvehicle.repository.SchoolRepository;
-import com.smartvehicle.security.jwt.JwtUtils;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 
 @RestController
@@ -36,7 +26,8 @@ public class RouteController {
 
     @Autowired
     private RouteMapper routeMapper;
-
+    @Autowired
+    private RoutePointMapper routePointMapper;
     @PostMapping("/register")
     public ResponseEntity<RouteRegResDTO> registerRoute(@Valid @RequestBody RouteRegistrationReq request) {
             RouteRegResDTO response = routeService.registerRoute(request);
@@ -44,8 +35,10 @@ public class RouteController {
     }
     @PostMapping("/route-point/register")
     public ResponseEntity<RoutePointResponseDTO> registerRoutePoint(@Valid @RequestBody RoutePointRegistrationReq request) {
-        RoutePointResponseDTO response = routeService.registerRoutePoint(request);
-            return new ResponseEntity<>(response, HttpStatus.CREATED);
+        RoutePoint routePoint = routeService.registerRoutePoint(request);
+
+        RoutePointResponseDTO routePointResponseDTO = routePointMapper.toResponseDTO(routePoint);
+            return new ResponseEntity<>(routePointResponseDTO, HttpStatus.CREATED);
     }
     /**
      * Get all routes
@@ -66,6 +59,14 @@ public class RouteController {
         RouteResponseDTO routeResponseDTO = routeMapper.toResponseDTO(route);
         return ResponseEntity.ok(routeResponseDTO);
     }
+
+    @GetMapping("/{id}/student-count")
+    public ResponseEntity<RouteStudentCountDTO> getRouteStudentCountById(@PathVariable Long id) {
+//        Route route = routeService.getRouteById(id);
+        Integer routeStudentCount =routeService.getRouteStudentCountById(id);
+        return ResponseEntity.ok(new RouteStudentCountDTO(routeStudentCount));
+    }
+
     @GetMapping("/smid/{id}")
     public ResponseEntity<RouteResponseDTO> getRouteById(@PathVariable String id) {
         Route route = routeService.getRouteBySmId(id);
@@ -85,6 +86,29 @@ public class RouteController {
         List<RouteResponseDTO> routeResponseDTOS = routeMapper.toResponseDTO(routes);
         return ResponseEntity.ok(routeResponseDTOS);
     }
+    @GetMapping("/school/{schoolId}")
+    public ResponseEntity<?> getRoutesBySchoolId(@PathVariable String schoolId) {
+        List<Route> routes = routeService.getRoutesBySchoolId(schoolId);
+        List<RouteResponseDTO> routeResponseDTOS = routeMapper.toResponseDTO(routes);
+        return ResponseEntity.ok(routeResponseDTOS);
+    }
+
+    @GetMapping("/passenger-info")
+    public ResponseEntity<List<PassengerInfoResponse>> getAllPassengerInfo() {
+        List<PassengerInfoResponse> passengerInfoList = routeService.getAllPassengerInfo();
+        return ResponseEntity.ok(passengerInfoList);
+    }
+    @GetMapping("/route-point/{smRoutePointId}/passenger-info")
+    public ResponseEntity<List<PassengerInfoResponse>> getAllPassengerInfo(@PathVariable String smRoutePointId) {
+        List<PassengerInfoResponse> passengerInfoList = routeService.getAllPassengerInfo(smRoutePointId);
+        return ResponseEntity.ok(passengerInfoList);
+    }
+    @PostMapping("/add/passenger-info")
+    public ResponseEntity<PassengerInfoDTO>  addPassengerInfo(@RequestBody PassengerInfoRequest request){
+        PassengerInfoDTO passengerInfoDTO= routeService.addPassengerInfo(request);
+        return new ResponseEntity<>(passengerInfoDTO, HttpStatus.CREATED);
+    }
+
 }
 
 

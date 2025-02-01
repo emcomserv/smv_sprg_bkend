@@ -83,6 +83,10 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error", getRootCauseMessage(ex), request);
     }
 
+    @ExceptionHandler(ApplicationException.class)
+    public ResponseEntity<Map<String, Object>> handleApplicationException(ApplicationException ex, WebRequest request) {
+        return buildErrorResponse(ex.getStatus(), "Invalid Request", getRootCauseMessage(ex), request);
+    }
     // Utility Method to Build Error Response
     private ResponseEntity<Map<String, Object>> buildErrorResponse(HttpStatus status, String error, String message, WebRequest request) {
         log.error("Error: {}, Cause: {}", error, message);
