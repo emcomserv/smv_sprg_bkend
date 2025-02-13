@@ -27,6 +27,7 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -85,7 +86,7 @@ class AuthControllerIntegrationTest {
         superAdminUser.setPhone("123456789");
         superAdminUser.setTwoFactorEnabled(false);
         superAdminUser.setPassword(passwordEncoder.encode("password"));
-        superAdminUser.setRoles(Collections.singleton(roleRepository.findByName("SUPERADMIN").get()));
+        superAdminUser.setRoles(List.of(roleRepository.findByName("SUPERADMIN").get()));
         userRepository.save(superAdminUser);
 
         LoginRequest loginRequest = new LoginRequest();
@@ -150,7 +151,7 @@ class AuthControllerIntegrationTest {
         User user = new User();
         user.setUsername("testuser");
         user.setPassword(passwordEncoder.encode("password"));
-        user.setRoles(Collections.singleton(roleRepository.findByName("PARENT").get()));
+        user.setRoles(List.of(roleRepository.findByName("PARENT").get()));
         userRepository.save(user);
 
         LoginRequest loginRequest = new LoginRequest();
@@ -171,7 +172,7 @@ class AuthControllerIntegrationTest {
         User user = new User();
         user.setUsername("testuser");
         user.setPassword(passwordEncoder.encode("oldPassword"));
-        user.setRoles(Collections.singleton(roleRepository.findByName("ROLE_USER").get()));
+        user.setRoles(List.of(roleRepository.findByName("ROLE_USER").get()));
         userRepository.save(user);
 
         ResetPasswordRequest resetPasswordRequest = new ResetPasswordRequest();

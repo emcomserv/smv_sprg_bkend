@@ -1,6 +1,7 @@
 package com.smartvehicle.controller;
 
 import com.smartvehicle.entity.*;
+import com.smartvehicle.exception.ApplicationException;
 import com.smartvehicle.payload.request.LoginRequest;
 import com.smartvehicle.payload.request.ResetPasswordRequest;
 import com.smartvehicle.payload.request.SignupRequest;
@@ -30,10 +31,7 @@ import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @RestController
@@ -81,8 +79,8 @@ public class AuthController {
         SecurityContextHolder.getContext().setAuthentication(authentication);
         UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
         String jwt = jwtUtils.generateJwtToken(authentication);
-        List<String> roles = user.getRoles().stream().map(Role::getName)
-                .collect(Collectors.toList());
+//        List<String> roles = user.getRoles().stream().map(Role::getName)
+//                .collect(Collectors.toList());
         if(user.getTwoFactorEnabled()){
             String status = twilioVerificationService.startVerification(userDetails.getPhone());
             if(status.equals("failed")){
@@ -101,44 +99,62 @@ public class AuthController {
             log.error("Failed for saving device token for user {} ",e.getMessage());
         }
         UserEntityResDTO entityObj=new UserEntityResDTO();
-        try {
+            List<Role> roles =user.getRoles();
+        List<String> roleNames = new ArrayList<>();
             if (!CollectionUtils.isEmpty(roles)) {
-                String role = roles.get(0).toUpperCase();
-                switch (role) {
-                    case "PARENT":
-                        Parent parent = parentRepository.findByUser_Id(user.getId());
-                        entityObj.setId(parent.getId());
-                        entityObj.setFirstName(parent.getFirstName());
-                        entityObj.setLastName(parent.getLastName());
-                        break;
-                    case "DRIVER":
-                        Driver driver = driverRepository.findByUser_Id(user.getId()).get();
-                        entityObj.setId(driver.getId());
-                        entityObj.setFirstName(driver.getFirstName());
-                        entityObj.setLastName(driver.getLastName());
-                        break;
-                    case "ATTENDER":
-                        Attender attender = attenderRepository.findByUser_Id(user.getId()).get();
-                        entityObj.setId(attender.getId());
-                        entityObj.setFirstName(attender.getFirstName());
-                        entityObj.setLastName(attender.getLastName());
-                        break;
-                    case "ADMIN":
-                        Admin admin = adminRepository.findByUser_Id(user.getId()).get();
-                        entityObj.setId(admin.getId());
-                        entityObj.setFirstName(admin.getFirstName());
-                        entityObj.setLastName(admin.getLastName());
-                        break;
-                    default:
-                }
-            }
-        }catch (Exception e){
-            log.error("failed to get entity id {} ",e.getMessage());
-        }
+                Role role =roles.get(0);
+                roleNames = roles.stream().map(r->r.getName()).toList();
+                validateMobileLogin(role.getIsMobile());
+                try {
+                    String roleName = role.getName().toUpperCase();
+                    switch (roleName) {
+                        case "PARENT":
+                            Parent parent = parentRepository.findByUser_Id(user.getId());
+                            entityObj.setId(parent.getId());
+                            entityObj.setFirstName(parent.getFirstName());
+                            entityObj.setLastName(parent.getLastName());
+                            break;
+                        case "DRIVER":
+                            Driver driver = driverRepository.findByUser_Id(user.getId()).get();
+                            entityObj.setId(driver.getId());
+                            entityObj.setFirstName(driver.getFirstName());
+                            entityObj.setLastName(driver.getLastName());
+                            break;
+                        case "ATTENDER":
+                            Attender attender = attenderRepository.findByUser_Id(user.getId()).get();
+                            entityObj.setId(attender.getId());
+                            entityObj.setFirstName(attender.getFirstName());
+                            entityObj.setLastName(attender.getLastName());
+                            break;
+                        case "ADMIN":
+                            Admin admin = adminRepository.findByUser_Id(user.getId()).get();
+                            entityObj.setId(admin.getId());
+                            entityObj.setFirstName(admin.getFirstName());
+                            entityObj.setLastName(admin.getLastName());
+                            break;
+                        default:
+                    }
 
+                } catch (Exception e) {
+                    log.error("failed to get entity id {} ", e.getMessage());
+                }
+            }else{
+                throw new ApplicationException("No role assigned to this user");
+            }
         return ResponseEntity
-                .ok(new JwtResponse(jwt, userDetails.getId(),userDetails.getUsername(),user.getTwoFactorEnabled(),roles,entityObj));
+                .ok(new JwtResponse(jwt, userDetails.getId(),userDetails.getUsername(),user.getTwoFactorEnabled(),
+                        roleNames,
+                        entityObj));
     }
+
+    private  void validateMobileLogin(boolean isMobile) {
+        if (CustomRequestContextHolder.getDeviceType().equalsIgnoreCase(ClientType.MOBILE.name())){
+            if(!isMobile){
+                throw new ApplicationException("Mobile login not allowed for this user",HttpStatus.UNAUTHORIZED);
+            }
+        }
+    }
+
     @PostMapping("/resetpassword")
     public ResponseEntity<?> getStudents(Authentication authentication,
                                          @RequestBody ResetPasswordRequest request) {

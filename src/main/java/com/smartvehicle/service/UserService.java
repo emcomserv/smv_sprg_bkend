@@ -12,7 +12,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 @Service
@@ -38,7 +40,7 @@ public class UserService {
         user.setEmail(request.getEmail());
         user.setTwoFactorEnabled(isOtp);
         user.setStatus(true);
-        Set<Role> roles = new HashSet<>();
+        List<Role> roles = new ArrayList<>();
 
         Role role = roleRepository.findByName(roleName)
                 .orElseThrow(() -> new RuntimeException("Error: No role find with  "+roleName));

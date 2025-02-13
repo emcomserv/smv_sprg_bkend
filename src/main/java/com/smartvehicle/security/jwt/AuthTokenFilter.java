@@ -1,5 +1,6 @@
 package com.smartvehicle.security.jwt;
 
+import com.smartvehicle.entity.ClientType;
 import com.smartvehicle.security.services.UserDetailsImpl;
 import com.smartvehicle.security.services.UserDetailsServiceImpl;
 import jakarta.servlet.FilterChain;
@@ -73,6 +74,8 @@ public class AuthTokenFilter extends OncePerRequestFilter {
         String deviceToken = request.getHeader("Device-Token");
         if (StringUtils.hasText(clientType) ) {
             CustomRequestContextHolder.setDeviceType(clientType);
+        }else{
+            CustomRequestContextHolder.setDeviceType(ClientType.WEB.name());
         }
         if (StringUtils.hasText(deviceToken) ) {
             CustomRequestContextHolder.setDeviceToken(deviceToken);

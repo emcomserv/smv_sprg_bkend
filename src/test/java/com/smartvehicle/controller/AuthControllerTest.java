@@ -87,7 +87,7 @@ class AuthControllerTest {
         role.setId(1L);
         role.setName("PARENT");
         role.setSchId("SHC0001");
-        user.setRoles(Collections.singleton(role));
+        user.setRoles(List.of(role));
         List<GrantedAuthority> authorities = List.of(new SimpleGrantedAuthority(role.getName()));
 
         Parent parent =new Parent();
