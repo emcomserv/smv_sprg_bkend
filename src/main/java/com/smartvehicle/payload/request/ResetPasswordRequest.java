@@ -14,6 +14,7 @@ public class ResetPasswordRequest {
 
     @NotBlank
     @Size(min = 6, max = 100,message = "Password should have minimum of 6 characters")
+    private String email;
     private String password;
 
 
