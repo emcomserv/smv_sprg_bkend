@@ -1,6 +1,7 @@
 package com.smartvehicle.controller;
 
 import com.smartvehicle.service.RouteService;
+import com.smartvehicle.service.StudentService;
 import com.smartvehicle.service.UserService;
 import com.smartvehicle.entity.*;
 import com.smartvehicle.mapper.StudentMapper;
@@ -19,7 +20,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 
 @RestController
@@ -35,6 +38,8 @@ public class StudentController {
     private RouteService routeService;
     @Autowired
     private StudentMapper studentMapper;
+    @Autowired
+    private StudentService studentService;
     @Autowired
     private ParentRepository parentRepository;
     @PostMapping("/register")
@@ -115,4 +120,16 @@ public class StudentController {
         StudentResponseDTO studentResponseDTO = studentMapper.toResponseDTO(student);
         return ResponseEntity.ok(studentResponseDTO);
     }
+
+    @GetMapping("/validate")
+    public ResponseEntity<Map<String, Object>> validateStudent(@RequestParam String input) {
+        boolean isValid = studentService.isValidStudent(input);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("status", isValid ? "Valid" : "Invalid");
+        response.put("isValid", isValid);
+
+        return ResponseEntity.ok(response);
+    }
+
 }

@@ -3,6 +3,8 @@ package com.smartvehicle.repository;
 import com.smartvehicle.entity.Route;
 import com.smartvehicle.entity.Student;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -14,4 +16,11 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
     List<Student> findAllByRoute_Id(Long routeId);
 
     List<Student> findAllByRoutePoint_Id(Long id);
+
+    @Query("SELECT s FROM Student s WHERE s.smStudentId = :studentId")
+    Student findByRouteSchoolAndStudentId( @Param("studentId") String studentId);
+    //@Query("SELECT s FROM Student s WHERE s.route.id = :routeId AND s.school.id = :schoolId AND s.smStudentId = :studentId")
+    //Student findByRouteSchoolAndStudentId(@Param("routeId") Long routeId, 
+    //                                      @Param("schoolId") Long schoolId, 
+    //                                      @Param("studentId") String studentId);
 }
