@@ -32,6 +32,9 @@ public class SwipeReportMobile {
     @Column(name = "longitude",nullable = false)
     private String longitude;
 
+    @Column(name = "image_name",nullable = false)
+    private String imageName;
+
     @CreationTimestamp
     @Column(name = "timestamp", nullable = false, updatable = false)
     private LocalDateTime timestamp;

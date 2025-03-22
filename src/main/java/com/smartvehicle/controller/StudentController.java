@@ -128,7 +128,8 @@ public class StudentController {
     public ResponseEntity<Map<String, Object>> validateAndStoreStudent(
             @RequestParam String input,
             @RequestParam String latitude,
-            @RequestParam String longitude) {
+            @RequestParam String longitude,
+            @RequestParam String imageName) {
 
         // Extract route_id, school_id, and student_id from input
         String[] inputParts = input.split("-");
@@ -152,6 +153,7 @@ public class StudentController {
             swipeReportMobile.setStudentId(studentId);
             swipeReportMobile.setLatitude(latitude);
             swipeReportMobile.setLongitude(longitude);
+            swipeReportMobile.setImageName(imageName);
             swipeReportMobileRepository.save(swipeReportMobile);
         }
 
