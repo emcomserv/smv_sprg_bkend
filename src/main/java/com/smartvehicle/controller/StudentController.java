@@ -1,5 +1,6 @@
 package com.smartvehicle.controller;
 
+import com.smartvehicle.repository.SwipeReportMobileRepository;
 import com.smartvehicle.service.RouteService;
 import com.smartvehicle.service.StudentService;
 import com.smartvehicle.service.UserService;
@@ -30,6 +31,8 @@ import java.util.Map;
 public class StudentController {
     @Autowired
     private StudentRepository studentRepository;
+    @Autowired
+    private SwipeReportMobileRepository swipeReportMobileRepository;
     @Autowired
     private UserService userService;
     @Autowired
@@ -121,13 +124,36 @@ public class StudentController {
         return ResponseEntity.ok(studentResponseDTO);
     }
 
-    @GetMapping("/validate")
-    public ResponseEntity<Map<String, Object>> validateStudent(@RequestParam String input) {
+    @PostMapping("/validate")
+    public ResponseEntity<Map<String, Object>> validateAndStoreStudent(
+            @RequestParam String input,
+            @RequestParam String latitude,
+            @RequestParam String longitude) {
+
+        // Extract route_id, school_id, and student_id from input
+        String[] inputParts = input.split("-");
+        String routeId = inputParts[0].toUpperCase();  // "TBC"
+        String schoolId = inputParts[1].toUpperCase(); // "TEST"
+        String studentId = inputParts[2].toUpperCase(); // "BNG00ABEF01"
+        studentId=studentId.substring(3);
+
+
+        // Validate student in the other table (students)
         boolean isValid = studentService.isValidStudent(input);
 
         Map<String, Object> response = new HashMap<>();
         response.put("status", isValid ? "Valid" : "Invalid");
         response.put("isValid", isValid);
+
+        if(isValid){
+            SwipeReportMobile swipeReportMobile = new SwipeReportMobile();
+            swipeReportMobile.setRouteId(routeId);
+            swipeReportMobile.setSchoolId(schoolId);
+            swipeReportMobile.setStudentId(studentId);
+            swipeReportMobile.setLatitude(latitude);
+            swipeReportMobile.setLongitude(longitude);
+            swipeReportMobileRepository.save(swipeReportMobile);
+        }
 
         return ResponseEntity.ok(response);
     }
