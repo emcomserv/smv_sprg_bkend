@@ -1,16 +1,15 @@
 package com.smartvehicle.controller;
 
 import com.smartvehicle.entity.SwipeImage;
+import com.smartvehicle.payload.request.SwapReportReq;
+import com.smartvehicle.payload.response.SwapReportResponse;
 import com.smartvehicle.service.FTPClientService;
 import com.smartvehicle.service.SwipeImageService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
 import java.util.List;
@@ -22,15 +21,20 @@ public class SwipeImageController {
     @Autowired
     private SwipeImageService swipeImageService;
 
+    @Autowired
+    private FTPClientService ftpService;
+
     @GetMapping("/studentId")
     public ResponseEntity<List<SwipeImage>> getSwipeByStudentId(@RequestParam String studentId) {
         return ResponseEntity.ok(swipeImageService.getSwipesByStudentId(studentId));
     }
 
-    @Autowired
-    private FTPClientService ftpService;
     @GetMapping("/byName")
     public ResponseEntity<byte[]> getImageByName(@RequestParam String imageName) {
+        String[] split = imageName.split("/");
+        if(split.length < 2 && split.length > 1)
+            imageName = split[0] + "/" + split[1] + "/Default/"+ split[1] + "_Default.jpg";
+
         try {
             byte[] imageData = ftpService.readFile(imageName);
             return new ResponseEntity<>(imageData, HttpStatus.OK);
@@ -39,4 +43,23 @@ public class SwipeImageController {
             throw new RuntimeException("Failed to read image: " + imageName, e);
         }
     }
+
+    @GetMapping("/by-school-with-date-range")
+    public ResponseEntity<?> getBySchoolAndDateRange(@RequestBody SwapReportReq request){
+        List<SwapReportResponse> responses = swipeImageService.getSwipesBySchoolAndDateRange(request);
+        if(responses.size() > 0)
+            return ResponseEntity.ok(responses);
+
+        return new ResponseEntity<>("Data not found for requested criteria", HttpStatus.NO_CONTENT);
+    }
+
+    @GetMapping("/by-school-with-filters")
+    public ResponseEntity<?> getBySchoolAndRouteAndDateRange(@RequestBody SwapReportReq request){
+        List<SwapReportResponse> responses = swipeImageService.getSwipesBySchoolAndRouteAndDateRange(request);
+        if(responses.size() > 0)
+            return ResponseEntity.ok(responses);
+
+        return new ResponseEntity<>("Data not found for requested criteria", HttpStatus.NO_CONTENT);
+    }
+
 }

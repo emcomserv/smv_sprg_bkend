@@ -1,6 +1,8 @@
 package com.smartvehicle.controller;
 
+import com.smartvehicle.repository.RouteSchlStudentMappingRepo;
 import com.smartvehicle.repository.SwipeReportMobileRepository;
+
 import com.smartvehicle.service.RouteService;
 import com.smartvehicle.service.StudentService;
 import com.smartvehicle.service.UserService;
@@ -45,37 +47,48 @@ public class StudentController {
     private StudentService studentService;
     @Autowired
     private ParentRepository parentRepository;
+    @Autowired private RouteSchlStudentMappingRepo routeSchlStudentMappingRepo;
     @PostMapping("/register")
     @Transactional
     public ResponseEntity<?> registerUser(@Valid @RequestBody StudentSignupReq request) throws Exception{
-            School school = schoolRepository.findById(request.getSchoolId())
-                    .orElseThrow(() -> new RuntimeException("Error: School not found with id  "+request.getSchoolId()));
-            User user = userService.registerUser(request, UserType.STUDENT.name(),false);
-            Parent parent = parentRepository.findById(request.getParentId())
-                    .orElseThrow(() -> new RuntimeException("Error: Parent not found with id  "+request.getParentId()));
-            Student student = new Student();
-            student.setFirstName(request.getFirstName());
-            student.setLastName(request.getLastName());
-            student.setLongitude(request.getLongitude());
-            student.setAge(request.getAge());
-            student.setGender(request.getGender());
-            student.setLatitude(request.getLatitude());
-            student.setSchool(school);
-            student.setParent(parent);
-            student.setStatus(true);
-            if(request.getRouteId()!=null){
-                Route route = routeService.getRouteById(request.getRouteId());
-                student.setRoute(route);
-                if(request.getRoutePointId()!=null){
-                    RoutePoint routePoint = routeService.getRoutePointById(request.getRoutePointId());
-                    student.setRoutePoint(routePoint);
-                }
+        School school = schoolRepository.findById(request.getSchoolId())
+                .orElseThrow(() -> new RuntimeException("Error: School not found with id  "+request.getSchoolId()));
+        User user = userService.registerUser(request, UserType.STUDENT.name(),false);
+        Parent parent = parentRepository.findById(request.getParentId())
+                .orElseThrow(() -> new RuntimeException("Error: Parent not found with id  "+request.getParentId()));
+        Student student = new Student();
+        student.setFirstName(request.getFirstName());
+        student.setLastName(request.getLastName());
+        student.setLongitude(request.getLongitude());
+        student.setAge(request.getAge());
+        student.setGender(request.getGender());
+        student.setLatitude(request.getLatitude());
+        student.setSchool(school);
+        student.setParent(parent);
+        student.setStatus(true);
+        if(request.getRouteId()!=null){
+            Route route = routeService.getRouteById(request.getRouteId());
+            student.setRoute(route);
+            if(request.getRoutePointId()!=null){
+                RoutePoint routePoint = routeService.getRoutePointById(request.getRoutePointId());
+                student.setRoutePoint(routePoint);
             }
+        }
 
-            studentRepository.save(student);
+        Student student1 = studentRepository.save(student);
+
+        //Saving data to mapping table
+        RouteSchoolStudentMapping routeSchoolStudentMapping = new RouteSchoolStudentMapping();
+        routeSchoolStudentMapping.setRoute(student1.getRoute());
+        routeSchoolStudentMapping.setSmStudentId(student1.getSmStudentId());
+        routeSchoolStudentMapping.setSchool(student1.getSchool());
+        routeSchoolStudentMapping.setProvId(student1.getSchool().getProvId());
+
+        routeSchlStudentMappingRepo.save(routeSchoolStudentMapping);
+
 //            SignupResponse response = new SignupResponse(request.getUsername(), request.getPhone());
         StudentResponseDTO studentResponseDTO = studentMapper.toResponseDTO(student);
-            return new ResponseEntity<StudentResponseDTO>(studentResponseDTO, HttpStatus.CREATED);
+        return new ResponseEntity<StudentResponseDTO>(studentResponseDTO, HttpStatus.CREATED);
     }
 
     @GetMapping
@@ -102,7 +115,7 @@ public class StudentController {
     }
     @PostMapping("/{id}/change-routepoint")
     public ResponseEntity<StudentResponseDTO> changeRoutePoint(@PathVariable Long id,
-                                                                     @RequestBody StudentPickupPointReq req) {
+                                                               @RequestBody StudentPickupPointReq req) {
         Student student = studentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Error: Student not found with id  "+id));
         student.setLatitude(req.getLatitude());
