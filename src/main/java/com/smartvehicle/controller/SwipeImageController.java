@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
+import java.sql.Date;
 import java.util.List;
 
 @Slf4j
@@ -45,7 +46,11 @@ public class SwipeImageController {
     }
 
     @GetMapping("/by-school-with-date-range")
-    public ResponseEntity<?> getBySchoolAndDateRange(@RequestBody SwapReportReq request){
+    public ResponseEntity<?> getBySchoolAndDateRange(@RequestParam String schoolId, @RequestParam Date startDate, @RequestParam Date endDate){
+        SwapReportReq request = new SwapReportReq();
+        request.setSchoolId(schoolId);
+        request.setStartDate(startDate);
+        request.setEndDate(endDate);
         List<SwapReportResponse> responses = swipeImageService.getSwipesBySchoolAndDateRange(request);
         if(responses.size() > 0)
             return ResponseEntity.ok(responses);
@@ -54,7 +59,16 @@ public class SwipeImageController {
     }
 
     @GetMapping("/by-school-with-filters")
-    public ResponseEntity<?> getBySchoolAndRouteAndDateRange(@RequestBody SwapReportReq request){
+    public ResponseEntity<?> getBySchoolAndRouteAndDateRange(@RequestParam String schoolId, @RequestParam Date startDate, @RequestParam Date endDate, @RequestParam(required = false) String routeId, @RequestParam(required = false) String studentId){
+        SwapReportReq request = new SwapReportReq();
+        request.setSchoolId(schoolId);
+        request.setStartDate(startDate);
+        request.setEndDate(endDate);
+        if(routeId != null)
+            request.setRouteId(routeId);
+        if(studentId != null)
+            request.setStudentId(studentId);
+
         List<SwapReportResponse> responses = swipeImageService.getSwipesBySchoolAndRouteAndDateRange(request);
         if(responses.size() > 0)
             return ResponseEntity.ok(responses);
