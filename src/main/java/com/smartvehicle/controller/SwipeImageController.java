@@ -64,9 +64,9 @@ public class SwipeImageController {
         request.setSchoolId(schoolId);
         request.setStartDate(startDate);
         request.setEndDate(endDate);
-        if(routeId != null)
+        if(routeId != null && !routeId.isEmpty())
             request.setRouteId(routeId);
-        if(studentId != null)
+        if(studentId != null && !studentId.isEmpty())
             request.setStudentId(studentId);
 
         List<SwapReportResponse> responses = swipeImageService.getSwipesBySchoolAndRouteAndDateRange(request);
