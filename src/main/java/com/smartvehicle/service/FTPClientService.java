@@ -13,6 +13,9 @@ import javax.annotation.PreDestroy;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.*;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
 @Service
 @Slf4j
 public class FTPClientService {
@@ -34,9 +37,9 @@ public class FTPClientService {
 
     private FTPClient ftpClient;
     private static final int MAX_RETRIES = 3;
-
     private static final int RETRY_DELAY_MS = 5000; // Retry delay in ms
     private static final int KEEP_ALIVE_INTERVAL_MS = 30000; // Keep-alive interval (30 seconds)
+    private final Lock lock = new ReentrantLock(); // To ensure thread safety
 
     @PostConstruct
     public void init() throws IOException {
@@ -87,28 +90,38 @@ public class FTPClientService {
                     Thread.currentThread().interrupt();
                 }
             } catch (IOException e) {
+                log.error("Error connecting to FTP server: " + e.getMessage(), e);
                 throw new IOException("Error connecting to FTP server: " + e.getMessage(), e);
             }
         }
     }
 
     @Scheduled(fixedDelay = KEEP_ALIVE_INTERVAL_MS) // Send a NOOP command every 30 seconds
-    public void keepAlive() throws IOException {
-        if (ftpClient != null && ftpClient.isConnected()) {
-            try {
-                ftpClient.sendNoOp();
-                log.debug("Sent NOOP to keep FTP connection alive.");
-            } catch (IOException e) {
-                log.error("Error sending NOOP command: " + e.getMessage(), e);
-                reconnect();
+    public void keepAlive() {
+        lock.lock(); // Ensure thread-safety
+        try {
+            if (ftpClient != null && ftpClient.isConnected()) {
+                try {
+                    ftpClient.sendNoOp();
+                    log.debug("Sent NOOP to keep FTP connection alive.");
+                } catch (IOException e) {
+                    log.error("Error sending NOOP command: " + e.getMessage(), e);
+                    reconnect();
+                }
             }
+        } finally {
+            lock.unlock();
         }
     }
 
-    private void reconnect() throws IOException {
+    private void reconnect() {
         log.warn("Reconnecting to FTP server...");
-        destroy(); // Close any existing connection
-        connectToFtpServer(); // Try to reconnect
+        try {
+            destroy(); // Close any existing connection
+            connectToFtpServer(); // Try to reconnect
+        } catch (IOException e) {
+            log.error("Failed to reconnect to FTP server.", e);
+        }
     }
 
     public byte[] readFile(String imageName) throws IOException {
@@ -139,6 +152,17 @@ public class FTPClientService {
                 retryCount++;
                 log.warn("FTP connection closed. Retrying... Attempt: " + retryCount);
                 reconnect(); // Reconnect to the server before retrying
+            } catch (IOException e) {
+                retryCount++;
+                log.error("Error reading file: " + e.getMessage(), e);
+                if (retryCount >= MAX_RETRIES) {
+                    throw e;
+                }
+                try {
+                    Thread.sleep(RETRY_DELAY_MS);
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                }
             }
         }
         throw new IOException("Failed to read file after " + MAX_RETRIES + " attempts.");
