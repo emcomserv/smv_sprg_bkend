@@ -35,18 +35,17 @@ public class FTPClientService {
     private FTPClient ftpClient;
     private static final int MAX_RETRIES = 3;
 
+    private static final int RETRY_DELAY_MS = 5000; // Retry delay in ms
+    private static final int KEEP_ALIVE_INTERVAL_MS = 30000; // Keep-alive interval (30 seconds)
+
     @PostConstruct
     public void init() throws IOException {
         ftpClient = new FTPClient();
-        ftpClient.setDefaultTimeout(60000); // 60 seconds
-        ftpClient.setConnectTimeout(60000); // 60 seconds
-        ftpClient.setDataTimeout(60000); // 60 seconds
+        ftpClient.setDefaultTimeout(60000); // 60 seconds timeout
+        ftpClient.setConnectTimeout(60000); // 60 seconds connect timeout
+        ftpClient.setDataTimeout(60000); // 60 seconds data timeout
 
-        ftpClient.connect(host, port);
-        ftpClient.login(username, password);
-        ftpClient.enterLocalPassiveMode();
-        ftpClient.setFileType(FTP.BINARY_FILE_TYPE);
-        log.debug("***** FTP connection established  ******");
+        connectToFtpServer();
     }
 
     @PreDestroy
@@ -62,11 +61,54 @@ public class FTPClientService {
         }
     }
 
-    @Scheduled(fixedDelay = 30000) // Send a NOOP command every 30 seconds
+    private void connectToFtpServer() throws IOException {
+        int retryCount = 0;
+        while (retryCount < MAX_RETRIES) {
+            try {
+                log.debug("Attempting to connect to FTP server...");
+                ftpClient.connect(host, port);
+                if (ftpClient.login(username, password)) {
+                    ftpClient.enterLocalPassiveMode();
+                    ftpClient.setFileType(FTP.BINARY_FILE_TYPE);
+                    log.debug("***** FTP connection established ******");
+                    return;
+                } else {
+                    throw new IOException("FTP login failed.");
+                }
+            } catch (FTPConnectionClosedException e) {
+                retryCount++;
+                log.warn("FTP connection closed. Retrying... Attempt: " + retryCount);
+                if (retryCount >= MAX_RETRIES) {
+                    throw e;  // Throw after max retries
+                }
+                try {
+                    Thread.sleep(RETRY_DELAY_MS);
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                }
+            } catch (IOException e) {
+                throw new IOException("Error connecting to FTP server: " + e.getMessage(), e);
+            }
+        }
+    }
+
+    @Scheduled(fixedDelay = KEEP_ALIVE_INTERVAL_MS) // Send a NOOP command every 30 seconds
     public void keepAlive() throws IOException {
         if (ftpClient != null && ftpClient.isConnected()) {
-            ftpClient.sendNoOp();
+            try {
+                ftpClient.sendNoOp();
+                log.debug("Sent NOOP to keep FTP connection alive.");
+            } catch (IOException e) {
+                log.error("Error sending NOOP command: " + e.getMessage(), e);
+                reconnect();
+            }
         }
+    }
+
+    private void reconnect() throws IOException {
+        log.warn("Reconnecting to FTP server...");
+        destroy(); // Close any existing connection
+        connectToFtpServer(); // Try to reconnect
     }
 
     public byte[] readFile(String imageName) throws IOException {
@@ -96,7 +138,7 @@ public class FTPClientService {
             } catch (FTPConnectionClosedException e) {
                 retryCount++;
                 log.warn("FTP connection closed. Retrying... Attempt: " + retryCount);
-                init(); // Reinitialize the connection
+                reconnect(); // Reconnect to the server before retrying
             }
         }
         throw new IOException("Failed to read file after " + MAX_RETRIES + " attempts.");
