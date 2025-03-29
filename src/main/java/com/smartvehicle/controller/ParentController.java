@@ -1,5 +1,8 @@
 package com.smartvehicle.controller;
 
+import com.smartvehicle.mapper.ParentMapper;
+import com.smartvehicle.payload.response.ParentResponseDTO;
+import com.smartvehicle.payload.response.ParentResponseUrDTO;
 import com.smartvehicle.service.StudentService;
 import com.smartvehicle.service.UserService;
 import com.smartvehicle.entity.*;
@@ -40,6 +43,8 @@ public class ParentController {
     private SchoolRepository schoolRepository;
     @Autowired
     private StudentMapper studentMapper;
+    @Autowired
+    private ParentMapper parentMapper;
     @PostMapping("/register")
     public ResponseEntity<?> registerUser(@Valid @RequestBody ParentSignupReq request) throws Exception{
             School school = schoolRepository.findById(request.getSchoolId())
@@ -75,7 +80,50 @@ public class ParentController {
         return ResponseEntity.ok(studentMapper.toResponseDTO(students));
     }
 
+    @PutMapping("/update")
+    public ResponseEntity<ParentResponseUrDTO> updateParentBySmParentId(
+            @RequestParam String smParentId,
+            @RequestBody ParentSignupReq request) {
 
+        // Find the parent by sm_parent_id
+        Parent parent = parentRepository.findBySmParentId(smParentId)
+                .orElseThrow(() -> new RuntimeException("Parent not found with sm_parent_id: " + smParentId));
 
+        // Update fields if present in request
+        if (request.getFirstName() != null) {
+            parent.setFirstName(request.getFirstName());
+        }
+
+        if (request.getLastName() != null) {
+            parent.setLastName(request.getLastName());
+        }
+
+        if (request.getCountryCode() != null) {
+            parent.setCountryCode(request.getCountryCode());
+        }
+
+        if (request.getSchoolId() != null) {
+            School school = schoolRepository.findById(request.getSchoolId())
+                    .orElseThrow(() -> new RuntimeException("School not found with ID: " + request.getSchoolId()));
+            parent.setSchool(school);
+        }
+
+        // Save the updated parent entity
+        Parent updatedParent = parentRepository.save(parent);
+
+        // Map to ParentResponseDTO using MapStruct
+        ParentResponseUrDTO responseDTO = parentMapper.toResponseUrDTO(updatedParent);
+
+        // Return the DTO as response
+        return ResponseEntity.ok(responseDTO);
+    }
+
+    @GetMapping("/by-parentId")
+    public ResponseEntity<ParentResponseDTO> getParentBySmParentId(@RequestParam String smParentId) {
+        Parent parent = parentRepository.findBySmParentId(smParentId)
+                .orElseThrow(() -> new RuntimeException("Parent not found with sm_parent_id: " + smParentId));
+        ParentResponseDTO responseDTO = parentMapper.toResponseDTO(parent);
+        return ResponseEntity.ok(responseDTO);
+    }
 
 }

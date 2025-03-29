@@ -173,4 +173,100 @@ public class StudentController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping("/school")
+    public ResponseEntity<List<StudentResponseLtDTO>> getStudentsBySchoolId(@RequestParam String schoolId) {
+        List<Student> students = studentService.findStudentsBySchoolId(schoolId);
+        List<StudentResponseLtDTO> studentResponseDTOS = studentMapper.toResponseLtDTO(students);
+        if (students.isEmpty()) {
+            return ResponseEntity.noContent().build();
+        }
+
+        return ResponseEntity.ok(studentResponseDTOS);
+    }
+
+    @PutMapping("/update")
+    public ResponseEntity<StudentResponseDTO> updateStudentBySmStudentId(
+            @RequestParam String smStudentId,
+            @RequestBody StudentSignupReq request) {
+
+        // Find the student by sm_student_id
+        Student student = studentRepository.findBySmStudentId(smStudentId)
+                .orElseThrow(() -> new RuntimeException("Student not found with sm_student_id: " + smStudentId));
+
+        // Update fields if present in request
+        if (request.getFirstName() != null) {
+            student.setFirstName(request.getFirstName());
+        }
+
+        if (request.getLastName() != null) {
+            student.setLastName(request.getLastName());
+        }
+
+        if (request.getAge() != null) {
+            student.setAge(request.getAge());
+        }
+
+        if (request.getGender() != null) {
+            student.setGender(request.getGender());
+        }
+
+        if (request.getLongitude() != null) {
+            student.setLongitude(request.getLongitude());
+        }
+
+        if (request.getLatitude() != null) {
+            student.setLatitude(request.getLatitude());
+        }
+
+        if (request.getStatus() != null) {
+            student.setStatus(request.getStatus());
+        }
+
+        // Update School if provided
+        if (request.getSchoolId() != null) {
+            School school = schoolRepository.findById(request.getSchoolId())
+                    .orElseThrow(() -> new RuntimeException("School not found with ID: " + request.getSchoolId()));
+            student.setSchool(school);
+        }
+
+        // Update Parent if provided
+        if (request.getParentId() != null) {
+            Parent parent = parentRepository.findById(request.getParentId())
+                    .orElseThrow(() -> new RuntimeException("Parent not found with ID: " + request.getParentId()));
+            student.setParent(parent);
+        }
+
+        // Update Route and RoutePoint if provided
+        if (request.getRouteId() != null) {
+            Route route = routeService.getRouteById(request.getRouteId());
+            student.setRoute(route);
+
+            if (request.getRoutePointId() != null) {
+                RoutePoint routePoint = routeService.getRoutePointById(request.getRoutePointId());
+                student.setRoutePoint(routePoint);
+            }
+        }
+
+        // Save the updated student
+        Student updatedStudent = studentRepository.save(student);
+
+        // Map the updated student to StudentResponseDTO
+        StudentResponseDTO responseDTO = studentMapper.toResponseDTO(updatedStudent);
+
+        return ResponseEntity.ok(responseDTO);
+    }
+
+    @GetMapping("/by-smStudentId")
+    public ResponseEntity<StudentResponseDTO> getStudentBySmStudentId(
+            @RequestParam String smStudentId) {
+
+        // Fetch student by sm_student_id
+        Student student = studentRepository.findBySmStudentId(smStudentId)
+                .orElseThrow(() -> new RuntimeException("Student not found with sm_student_id: " + smStudentId));
+
+        // Map the student entity to StudentResponseDTO using MapStruct
+        StudentResponseDTO responseDTO = studentMapper.toResponseDTO(student);
+
+        return ResponseEntity.ok(responseDTO);
+    }
 }
