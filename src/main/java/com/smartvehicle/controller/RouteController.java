@@ -1,12 +1,10 @@
 package com.smartvehicle.controller;
 
 import com.smartvehicle.mapper.RoutePointMapper;
-import com.smartvehicle.payload.request.PassengerInfoRequest;
+import com.smartvehicle.payload.request.*;
 import com.smartvehicle.service.RouteService;
 import com.smartvehicle.entity.*;
 import com.smartvehicle.mapper.RouteMapper;
-import com.smartvehicle.payload.request.RoutePointRegistrationReq;
-import com.smartvehicle.payload.request.RouteRegistrationReq;
 import com.smartvehicle.payload.response.*;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -107,6 +105,17 @@ public class RouteController {
     public ResponseEntity<PassengerInfoDTO>  addPassengerInfo(@RequestBody PassengerInfoRequest request){
         PassengerInfoDTO passengerInfoDTO= routeService.addPassengerInfo(request);
         return new ResponseEntity<>(passengerInfoDTO, HttpStatus.CREATED);
+    }
+
+    //UPDATE API For Route and Route Points
+    @PutMapping("update/route-point/{id}")
+    public ResponseEntity<?> updateRoutePointInfo(@PathVariable String id, @Valid @RequestBody RoutePointUpdateReq updateReq) {
+        return routeService.updateRoutePointInfo(id, updateReq);
+    }
+
+    @PutMapping("update/{id}")
+    public ResponseEntity<?> updateRouteInfo(@PathVariable String id, @Valid @RequestBody RouteUpdateReq updateReq) {
+        return routeService.updateRouteInfo(id, updateReq);
     }
 
 }

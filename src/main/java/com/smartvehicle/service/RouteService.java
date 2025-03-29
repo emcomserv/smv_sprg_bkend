@@ -7,9 +7,7 @@ import com.smartvehicle.entity.RoutePoint;
 import com.smartvehicle.entity.School;
 import com.smartvehicle.exception.ApplicationException;
 import com.smartvehicle.mapper.PassengerInfoMapper;
-import com.smartvehicle.payload.request.PassengerInfoRequest;
-import com.smartvehicle.payload.request.RoutePointRegistrationReq;
-import com.smartvehicle.payload.request.RouteRegistrationReq;
+import com.smartvehicle.payload.request.*;
 import com.smartvehicle.payload.response.PassengerInfoDTO;
 import com.smartvehicle.payload.response.PassengerInfoResponse;
 import com.smartvehicle.payload.response.RoutePointResponseDTO;
@@ -18,14 +16,17 @@ import com.smartvehicle.repository.PassengerInfoRepository;
 import com.smartvehicle.repository.RoutePointRepository;
 import com.smartvehicle.repository.RouteRepository;
 import com.smartvehicle.repository.SchoolRepository;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class RouteService {
@@ -145,5 +146,58 @@ public class RouteService {
 
     public List<PassengerInfoResponse> getAllPassengerInfo(String smRoutePointId) {
         return passengerInfoRepository.fetchPassengerInfo(smRoutePointId);
+    }
+
+    @Transactional
+    public ResponseEntity<?> updateRoutePointInfo(String routePointId, RoutePointUpdateReq request) {
+        Optional<RoutePoint> routePointOptional = routePointRepository.findBySmRoutePointId(routePointId);
+        if(!routePointOptional.isPresent())
+            return ResponseEntity.ofNullable("Route point is not found with Id " + routePointId );
+
+        RoutePoint routePoint = new RoutePoint();
+        routePoint.setId(routePointOptional.get().getId());
+        routePoint.setSeqOrder(request.getSeqOrder());
+        routePoint.setRoutePointName(request.getRoutePointName());
+        routePoint.setTitle(request.getTitle());
+        routePoint.setLatitude(request.getLatitude());
+        routePoint.setLongitude(request.getLongitude());
+        routePoint.setStatus(request.getStatus());
+        routePoint.setReserve(request.getReserve());
+        routePoint.setContent(request.getContent());
+        if(request.getRouteId() != null && request.getRouteId() != 0){
+            Optional<Route> route = routeRepository.findById(request.getRouteId());
+            if(route.isPresent())
+                routePoint.setRoute(route.get());
+        }
+        routePoint.setSchId(request.getSchoolId());
+        routePoint.setSmRoutePointId(routePointId);
+
+        RoutePoint saved = routePointRepository.save(routePoint);
+        return ResponseEntity.ok("Updated route point information for Id " + saved.getId());
+
+    }
+
+    @Transactional
+    public ResponseEntity<?> updateRouteInfo(String routeId, RouteUpdateReq updateReq) {
+        Optional<Route> routeOptional = routeRepository.findBySmRouteId(routeId);
+        if(!routeOptional.isPresent())
+            return ResponseEntity.ofNullable("Route is not found with Id " + routeId );
+
+        Route route = new Route();
+        route.setId(routeOptional.get().getId());
+        route.setRouteName(updateReq.getRouteName());
+        route.setTitle(updateReq.getTitle());
+        route.setStatus(updateReq.getStatus());
+        route.setReserve(updateReq.getReserve());
+        route.setContent(updateReq.getContent());
+        if(updateReq.getSchoolId()!= null &&!updateReq.getSchoolId().isEmpty()){
+            Optional<School> school = schoolRepository.findById(updateReq.getSchoolId());
+            if(school.isPresent())
+                route.setSchool(school.get());
+        }
+        route.setSmRouteId(updateReq.getSmRouteId());
+
+        routeRepository.updateRoute(route.getSchool().getId(), route.getRouteName(), route.getTitle(), route.getStatus(), route.getReserve(), route.getContent(), route.getSmRouteId());
+        return ResponseEntity.ok("Updated route information for Id " + route.getId());
     }
 }

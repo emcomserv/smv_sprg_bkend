@@ -42,5 +42,6 @@ public class RoutePoint extends BaseEntity{
     private String content;
     @Column(name = "sm_route_point_id")
     private String smRoutePointId;
-
+    @Column(name = "sch_id")
+    private String schId;
 }

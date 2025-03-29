@@ -1,5 +1,7 @@
 package com.smartvehicle.controller;
 
+import com.smartvehicle.payload.request.AttenderUpdateReq;
+import com.smartvehicle.repository.UserRepository;
 import com.smartvehicle.service.RouteService;
 import com.smartvehicle.service.UserService;
 import com.smartvehicle.entity.*;
@@ -13,9 +15,11 @@ import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Optional;
 
 
 @RestController
@@ -31,6 +35,9 @@ public class AttenderController {
     private RouteService routeService;
     @Autowired
     private AttenderMapper attenderMapper;
+    @Autowired
+    UserRepository userRepository;
+
     @PostMapping("/register")
     public ResponseEntity<?> registerUser(@Valid @RequestBody AttenderSignupReq request) throws Exception{
             School school = schoolRepository.findById(request.getSchoolId())
@@ -75,6 +82,46 @@ public class AttenderController {
                 .orElseThrow(() -> new RuntimeException("Error: Attender not found with id  "+id));
         AttenderResponseDTO attenderResponseDTO = attenderMapper.toResponseDTO(attender);
         return ResponseEntity.ok(attenderResponseDTO);
+    }
+
+    @PutMapping("/update/{id}")
+    @Transactional
+    public ResponseEntity<?> updateAttenderInfo(@PathVariable String id, @Valid @RequestBody AttenderUpdateReq updateReq){
+        Optional<Attender> attenderOptional = attenderRepository.findBySmAttenderId(id);
+        if(!attenderOptional.isPresent())
+            return ResponseEntity.ofNullable("Attender is not found with Id " + id);
+
+        //For updating user Details
+        Optional<User> userOptional = userRepository.findById(attenderOptional.get().getUser().getId());
+        User user = null;
+        if(userOptional.isPresent()){
+            user = userOptional.get();
+            if(updateReq.getPhone() != null && !updateReq.getPhone().isEmpty())
+                user.setPhone(updateReq.getPhone());
+            if(updateReq.getEmail() != null && !updateReq.getEmail().isEmpty())
+                user.setEmail(updateReq.getEmail());
+
+            user = userRepository.save(user);
+        }
+
+        Attender attender = new Attender();
+        attender.setId(attenderOptional.get().getId());
+        attender.setSmAttenderId(id);
+        attender.setFirstName(updateReq.getFirstName());
+        attender.setLastName(updateReq.getLastName());
+        if(updateReq.getRouteId() != null && !updateReq.getRouteId().isEmpty()){
+            Route route = routeService.getRouteBySmId(updateReq.getRouteId());
+            attender.setRoute(route);
+        }
+        if(updateReq.getSchoolId() != null && !updateReq.getSchoolId().isEmpty()){
+            Optional<School> school = schoolRepository.findById(updateReq.getSchoolId());
+            if(school.isPresent())
+                attender.setSchool(school.get());
+        }
+        attender.setUser(user);
+        attenderRepository.save(attender);
+
+        return ResponseEntity.ok("Attender updated successfully for ID " + id);
     }
 
 }

@@ -25,4 +25,6 @@ public  interface AdminRepository extends JpaRepository<Admin,Long> {
     List<Admin> findBySMRoute_Id(String smRouteId );
 
     List<Admin> findBySchool_Id(String schoolId);
+
+    Optional<Admin> findBySmAdminId(String smAdminId);
 }

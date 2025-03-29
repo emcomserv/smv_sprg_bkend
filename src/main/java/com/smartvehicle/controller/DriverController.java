@@ -1,5 +1,8 @@
 package com.smartvehicle.controller;
 
+import com.smartvehicle.payload.request.AdminUpdateReq;
+import com.smartvehicle.payload.request.DriverUpdateReq;
+import com.smartvehicle.repository.UserRepository;
 import com.smartvehicle.service.RouteService;
 import com.smartvehicle.service.UserService;
 import com.smartvehicle.entity.*;
@@ -18,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Optional;
 
 
 @RestController
@@ -30,11 +34,12 @@ public class DriverController {
     private UserService userService;
     @Autowired
     private SchoolRepository schoolRepository;
-
     @Autowired
     private DriverMapper driverMapper;
     @Autowired
     private RouteService routeService;
+    @Autowired
+    private UserRepository userRepository;
     @PostMapping("/register")
     @Transactional
     public ResponseEntity<?> registerUser(@Valid @RequestBody DriverSignupReq request) throws Exception{
@@ -86,5 +91,48 @@ public class DriverController {
                 .orElseThrow(() -> new RuntimeException("Error: Driver not found with id  "+id));
         DriverResponseDTO driverResponseDTO = driverMapper.toResponseDTO(driver);
         return ResponseEntity.ok(driverResponseDTO);
+    }
+
+    @PutMapping("/update/{id}")
+    @Transactional
+    public ResponseEntity<?> updateDriverInfo(@PathVariable String id, @Valid @RequestBody DriverUpdateReq updateReq){
+        Optional<Driver> driverOptional = driverRepository.findBySmDriverId(id);
+        if(!driverOptional.isPresent())
+            return ResponseEntity.ofNullable("Driver is not found with Id " + id);
+
+        //For updating user Details
+        Optional<User> userOptional = userRepository.findById(driverOptional.get().getUser().getId());
+        User user = null;
+        if(userOptional.isPresent()){
+            user = userOptional.get();
+            if(updateReq.getPhone() != null && !updateReq.getPhone().isEmpty())
+                user.setPhone(updateReq.getPhone());
+            if(updateReq.getEmail() != null && !updateReq.getEmail().isEmpty())
+                user.setEmail(updateReq.getEmail());
+
+            user = userRepository.save(user);
+        }
+
+        Driver driver = new Driver();
+        driver.setId(driverOptional.get().getId());
+        driver.setSmDriverId(id);
+        driver.setFirstName(updateReq.getFirstName());
+        driver.setLastName(updateReq.getLastName());
+
+        if(updateReq.getSchoolId() != null && !updateReq.getSchoolId().isEmpty()){
+            Optional<School> school = schoolRepository.findById(updateReq.getSchoolId());
+            if(school.isPresent())
+                driver.setSchool(school.get());
+        }
+
+        if(updateReq.getRouteId() != null && !updateReq.getRouteId().isEmpty()){
+            Route route = routeService.getRouteBySmId(updateReq.getRouteId());
+            driver.setRoute(route);
+        }
+
+        driver.setUser(user);
+        driverRepository.save(driver);
+
+        return ResponseEntity.ok("Driver details updated successfully for ID " + id);
     }
 }

@@ -1,5 +1,8 @@
 package com.smartvehicle.controller;
 
+import com.smartvehicle.payload.request.AdminUpdateReq;
+import com.smartvehicle.payload.request.AttenderUpdateReq;
+import com.smartvehicle.repository.UserRepository;
 import com.smartvehicle.service.AdminService;
 import com.smartvehicle.service.RouteService;
 import com.smartvehicle.service.UserService;
@@ -21,6 +24,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/v1/admin")
@@ -38,6 +42,9 @@ public class AdminController {
     private RouteService routeService;
     @Autowired
     private AdminMapper adminMapper ;
+    @Autowired
+    private UserRepository userRepository;
+
     @PostMapping("/register")
     @Transactional
     public ResponseEntity<?> registerUser(@Valid @RequestBody AdminSignupReq request) throws Exception{
@@ -108,5 +115,40 @@ public class AdminController {
         return ResponseEntity.ok(adminResponseDTOS);
     }
 
+    @PutMapping("/update/{id}")
+    @Transactional
+    public ResponseEntity<?> updateAdminInfo(@PathVariable String id, @Valid @RequestBody AdminUpdateReq updateReq){
+        Optional<Admin> adminOptional = adminRepository.findBySmAdminId(id);
+        if(!adminOptional.isPresent())
+            return ResponseEntity.ofNullable("Admin is not found with Id " + id);
 
+        //For updating user Details
+        Optional<User> userOptional = userRepository.findById(adminOptional.get().getUser().getId());
+        User user = null;
+        if(userOptional.isPresent()){
+            user = userOptional.get();
+            if(updateReq.getPhone() != null && !updateReq.getPhone().isEmpty())
+                user.setPhone(updateReq.getPhone());
+            if(updateReq.getEmail() != null && !updateReq.getEmail().isEmpty())
+                user.setEmail(updateReq.getEmail());
+
+            user = userRepository.save(user);
+        }
+
+        Admin admin = new Admin();
+        admin.setId(adminOptional.get().getId());
+        admin.setSmAdminId(id);
+        admin.setFirstName(updateReq.getFirstName());
+        admin.setLastName(updateReq.getLastName());
+
+        if(updateReq.getSchoolId() != null && !updateReq.getSchoolId().isEmpty()){
+            Optional<School> school = schoolRepository.findById(updateReq.getSchoolId());
+            if(school.isPresent())
+                admin.setSchool(school.get());
+        }
+        admin.setUser(user);
+        adminRepository.save(admin);
+
+        return ResponseEntity.ok("Admin details updated successfully for ID " + id);
+    }
 }
