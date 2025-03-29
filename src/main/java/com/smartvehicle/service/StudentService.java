@@ -16,6 +16,11 @@ public class StudentService {
         return studentRepository.findAllByParent_Id(parentId);
     }
 
+    public List<Student> findStudentsBySchoolId(String schoolId) {
+
+        return studentRepository.findBySchool_Id(schoolId);
+    }
+
     public boolean isValidStudent(String input) {
         try {
             String[] parts = input.split("-");

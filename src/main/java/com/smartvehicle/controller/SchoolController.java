@@ -110,4 +110,54 @@ public class SchoolController {
         return ResponseEntity.ok(schoolResponseDTOS);
     }
 
+    @PutMapping("/update")
+    public ResponseEntity<SchoolResponseDTO> updateSchoolById(
+            @RequestParam String id,
+            @RequestBody SchoolRegistrationReq request) {
+
+        // Find the school by ID
+        School school = schoolRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("School not found with ID: " + id));
+
+        // Update only the fields provided in the request
+        if (request.getName() != null) {
+            school.setName(request.getName());
+        }
+
+        if (request.getCountryId() != null) {
+            school.setCountryId(request.getCountryId());
+        }
+
+        if (request.getProvId() != null) {
+            school.setProvId(request.getProvId());
+        }
+
+        if (request.getAreaId() != null) {
+            school.setAreaId(request.getAreaId());
+        }
+
+        if (request.getEntityId() != null) {
+            school.setEntityId(request.getEntityId());
+        }
+
+        if (request.getContactNum() != null) {
+            school.setContactNum(request.getContactNum());
+        }
+
+        if (request.getContactName() != null) {
+            school.setContactName(request.getContactName());
+        }
+
+        if (request.getStatus() != null) {
+            school.setStatus(request.getStatus());
+        }
+
+        // Save the updated school
+        School updatedSchool = schoolRepository.save(school);
+
+        // Map to DTO using MapStruct
+        SchoolResponseDTO responseDTO = schoolMapper.toResponseDTO(updatedSchool);
+
+        return ResponseEntity.ok(responseDTO);
+    }
 }
