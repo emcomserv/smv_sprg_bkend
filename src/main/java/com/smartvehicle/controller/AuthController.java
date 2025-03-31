@@ -156,6 +156,22 @@ public class AuthController {
     }
 
     @PostMapping("/resetpassword")
+    public ResponseEntity<?> resetPassword(@RequestBody ResetPasswordRequest request) {
+
+        String userName = request.getUserName();
+
+        Optional<User> optionalUser = userRepository.findByUsername(userName);
+        if(!optionalUser.isPresent()){
+            throw new RuntimeException("Invalid Request : No such Username found");
+        }
+        User user = optionalUser.get();
+        user.setPassword(encoder.encode(request.getPassword()));
+        userRepository.save(user);
+        return ResponseEntity.ok(true);
+    }
+
+    //This method is being used in TEST Classes
+
     public ResponseEntity<?> getStudents(Authentication authentication,
                                          @RequestBody ResetPasswordRequest request) {
         if (authentication == null || !(authentication.getDetails() instanceof Map)) {
@@ -171,6 +187,23 @@ public class AuthController {
         userRepository.save(user);
         return ResponseEntity.ok(true);
     }
+
+//    @PostMapping("/resetpassword")
+//    public ResponseEntity<?> getStudents(Authentication authentication,
+//                                         @RequestBody ResetPasswordRequest request) {
+//        if (authentication == null || !(authentication.getDetails() instanceof Map)) {
+//            throw new RuntimeException("Unauthorised User");
+//        }
+//
+//        Map<String, Object> details = (Map<String, Object>) authentication.getDetails();
+//        Long userId = (Long) details.get("userId");
+//
+//        User user = userRepository.findById(userId)
+//                .orElseThrow(() -> new RuntimeException("Invalid Request : No such Username found"));
+//        user.setPassword(encoder.encode(request.getPassword()));
+//        userRepository.save(user);
+//        return ResponseEntity.ok(true);
+//    }
 
 //    @PostMapping("/signup")
 //    public ResponseEntity<?> registerUser(@Valid @RequestBody SignupRequest request,
