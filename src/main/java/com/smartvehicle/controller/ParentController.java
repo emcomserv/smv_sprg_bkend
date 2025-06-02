@@ -47,18 +47,25 @@ public class ParentController {
     private ParentMapper parentMapper;
     @PostMapping("/register")
     public ResponseEntity<?> registerUser(@Valid @RequestBody ParentSignupReq request) throws Exception{
-            School school = schoolRepository.findById(request.getSchoolId())
-                    .orElseThrow(() -> new RuntimeException("Error: School not found with id  "+request.getSchoolId()));
-            User user = userService.registerUser(request, UserType.PARENT.name(),false);
-            Parent parent = new Parent();
-            parent.setUser(user);
-            parent.setFirstName(request.getFirstName());
-            parent.setLastName(request.getLastName());
-            parent.setSchool(school);
-            parent.setCountryCode(request.getCountryCode());
-            parentRepository.save(parent);
-            SignupResponse response = new SignupResponse(request.getUsername(), request.getPhone());
-            return new ResponseEntity<SignupResponse>(response, HttpStatus.CREATED);
+        // Check for duplicate smParentId
+        if (parentRepository.findBySmParentId(request.getSmParentId()).isPresent()) {
+            return ResponseEntity
+                    .status(HttpStatus.CONFLICT)
+                    .body("smParentId already exists! Please use a unique value.");
+        }
+        School school = schoolRepository.findById(request.getSchoolId())
+                .orElseThrow(() -> new RuntimeException("Error: School not found with id  "+request.getSchoolId()));
+        User user = userService.registerUser(request, UserType.PARENT.name(),false);
+        Parent parent = new Parent();
+        parent.setUser(user);
+        parent.setFirstName(request.getFirstName());
+        parent.setLastName(request.getLastName());
+        parent.setSchool(school);
+        parent.setCountryCode(request.getCountryCode());
+        parent.setSmParentId(request.getSmParentId());
+        parentRepository.save(parent);
+        SignupResponse response = new SignupResponse(request.getUsername(), request.getPhone());
+        return new ResponseEntity<SignupResponse>(response, HttpStatus.CREATED);
     }
 
     @GetMapping("/student")

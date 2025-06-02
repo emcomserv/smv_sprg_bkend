@@ -10,15 +10,12 @@ import com.smartvehicle.mapper.PassengerInfoMapper;
 import com.smartvehicle.payload.request.*;
 import com.smartvehicle.payload.response.PassengerInfoDTO;
 import com.smartvehicle.payload.response.PassengerInfoResponse;
-import com.smartvehicle.payload.response.RoutePointResponseDTO;
 import com.smartvehicle.payload.response.RouteRegResDTO;
 import com.smartvehicle.repository.PassengerInfoRepository;
 import com.smartvehicle.repository.RoutePointRepository;
 import com.smartvehicle.repository.RouteRepository;
 import com.smartvehicle.repository.SchoolRepository;
-import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -103,6 +100,10 @@ public class RouteService {
         Route route = routeRepository.findById(request.getRouteId())
                 .orElseThrow(() -> new RuntimeException("Error: Route not found with ID " + request.getRouteId()));
 
+        if(routePointRepository.existsBySmRoutePointId(request.getSmRoutePointId())){
+            throw new RuntimeException("Error :smRoutePointId already exists");
+        }
+
         // Check if a route point with the same sequence order already exists for the route
 //        if (routePointRepository.existsByRouteAndSeqOrder(request.getRouteId(), request.getSeqOrder())) {
 //            throw new RuntimeException("Error: Route point with sequence order " + request.getSeqOrder() + " already exists for this route.");
@@ -119,7 +120,10 @@ public class RouteService {
         routePoint.setStatus(request.getStatus());
         routePoint.setReserve(request.getReserve());
         routePoint.setContent(request.getContent());
+        routePoint.setSchId(request.getSchoolId());
+        routePoint.setSmRoutePointId(request.getSmRoutePointId());
         routePointRepository.save(routePoint);
+
 
         // Return a response DTO
         return routePoint;
@@ -130,7 +134,7 @@ public class RouteService {
 
         boolean isExist = passengerInfoRepository.existsBySmRoutePointIdAndSmStudentId(request.getSmRoutePointId(),request.getSmStudentId());
         if (isExist){
-          throw new ApplicationException("Student already boarded for this Route");
+            throw new ApplicationException("Student already boarded for this Route");
         }
 
         PassengerInfo passengerInfo = new PassengerInfo();
@@ -149,55 +153,55 @@ public class RouteService {
     }
 
     @Transactional
-    public ResponseEntity<?> updateRoutePointInfo(String routePointId, RoutePointUpdateReq request) {
-        Optional<RoutePoint> routePointOptional = routePointRepository.findBySmRoutePointId(routePointId);
-        if(!routePointOptional.isPresent())
-            return ResponseEntity.ofNullable("Route point is not found with Id " + routePointId );
+    public ResponseEntity<?> updateRouteInfo(String routeId, RouteUpdateReq updateReq) {
+        Optional<Route> routeOptional = routeRepository.findBySmRouteId(routeId);
+        if (!routeOptional.isPresent())
+            return ResponseEntity.ofNullable("Route is not found with Id " + routeId);
 
-        RoutePoint routePoint = new RoutePoint();
-        routePoint.setId(routePointOptional.get().getId());
-        routePoint.setSeqOrder(request.getSeqOrder());
-        routePoint.setRoutePointName(request.getRoutePointName());
-        routePoint.setTitle(request.getTitle());
-        routePoint.setLatitude(request.getLatitude());
-        routePoint.setLongitude(request.getLongitude());
-        routePoint.setStatus(request.getStatus());
-        routePoint.setReserve(request.getReserve());
-        routePoint.setContent(request.getContent());
-        if(request.getRouteId() != null && request.getRouteId() != 0){
-            Optional<Route> route = routeRepository.findById(request.getRouteId());
-            if(route.isPresent())
-                routePoint.setRoute(route.get());
+        Route route = routeOptional.get();
+
+        if (updateReq.getRouteName() != null) route.setRouteName(updateReq.getRouteName());
+        if (updateReq.getTitle() != null) route.setTitle(updateReq.getTitle());
+        if (updateReq.getStatus() != null) route.setStatus(updateReq.getStatus());
+        if (updateReq.getReserve() != null) route.setReserve(updateReq.getReserve());
+        if (updateReq.getContent() != null) route.setContent(updateReq.getContent());
+        if (updateReq.getSmRouteId() != null) route.setSmRouteId(updateReq.getSmRouteId());
+
+        if (updateReq.getSchoolId() != null && !updateReq.getSchoolId().isEmpty()) {
+            Optional<School> school = schoolRepository.findById(updateReq.getSchoolId());
+            if (school.isPresent()) route.setSchool(school.get());
         }
-        routePoint.setSchId(request.getSchoolId());
-        routePoint.setSmRoutePointId(routePointId);
 
-        RoutePoint saved = routePointRepository.save(routePoint);
-        return ResponseEntity.ok("Updated route point information for Id " + saved.getId());
-
+        routeRepository.save(route);
+        return ResponseEntity.ok("Updated route information for Id " + route.getId());
     }
 
     @Transactional
-    public ResponseEntity<?> updateRouteInfo(String routeId, RouteUpdateReq updateReq) {
-        Optional<Route> routeOptional = routeRepository.findBySmRouteId(routeId);
-        if(!routeOptional.isPresent())
-            return ResponseEntity.ofNullable("Route is not found with Id " + routeId );
+    public ResponseEntity<?> updateRoutePointInfo(String routePointId, RoutePointUpdateReq request) {
+        Optional<RoutePoint> routePointOptional = routePointRepository.findBySmRoutePointId(routePointId);
+        if (!routePointOptional.isPresent())
+            return ResponseEntity.ofNullable("Route point is not found with Id " + routePointId);
 
-        Route route = new Route();
-        route.setId(routeOptional.get().getId());
-        route.setRouteName(updateReq.getRouteName());
-        route.setTitle(updateReq.getTitle());
-        route.setStatus(updateReq.getStatus());
-        route.setReserve(updateReq.getReserve());
-        route.setContent(updateReq.getContent());
-        if(updateReq.getSchoolId()!= null &&!updateReq.getSchoolId().isEmpty()){
-            Optional<School> school = schoolRepository.findById(updateReq.getSchoolId());
-            if(school.isPresent())
-                route.setSchool(school.get());
+        RoutePoint routePoint = routePointOptional.get();
+
+        if (request.getSeqOrder() != null) routePoint.setSeqOrder(request.getSeqOrder());
+        if (request.getRoutePointName() != null) routePoint.setRoutePointName(request.getRoutePointName());
+        if (request.getTitle() != null) routePoint.setTitle(request.getTitle());
+        if (request.getLatitude() != null) routePoint.setLatitude(request.getLatitude());
+        if (request.getLongitude() != null) routePoint.setLongitude(request.getLongitude());
+        if (request.getStatus() != null) routePoint.setStatus(request.getStatus());
+        if (request.getReserve() != null) routePoint.setReserve(request.getReserve());
+        if (request.getContent() != null) routePoint.setContent(request.getContent());
+        if (request.getSmRoutePointId() != null) routePoint.setSmRoutePointId(request.getSmRoutePointId());
+        if (request.getSchoolId() != null) routePoint.setSchId(request.getSchoolId());
+
+        if (request.getRouteId() != null && request.getRouteId() != 0) {
+            Optional<Route> route = routeRepository.findById(request.getRouteId());
+            route.ifPresent(routePoint::setRoute);
         }
-        route.setSmRouteId(updateReq.getSmRouteId());
 
-        routeRepository.updateRoute(route.getSchool().getId(), route.getRouteName(), route.getTitle(), route.getStatus(), route.getReserve(), route.getContent(), route.getSmRouteId());
-        return ResponseEntity.ok("Updated route information for Id " + route.getId());
+        RoutePoint saved = routePointRepository.save(routePoint);
+        return ResponseEntity.ok("Updated route point information for Id " + saved.getId());
     }
+
 }

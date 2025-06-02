@@ -40,18 +40,25 @@ public class AttenderController {
 
     @PostMapping("/register")
     public ResponseEntity<?> registerUser(@Valid @RequestBody AttenderSignupReq request) throws Exception{
-            School school = schoolRepository.findById(request.getSchoolId())
-                    .orElseThrow(() -> new RuntimeException("Error: School not found with id  "+request.getSchoolId()));
-            User user = userService.registerUser(request, UserType.ATTENDER.name(),false);
-            Route route = routeService.getRouteById(request.getRouteId());
-            Attender attender = new Attender();
-            attender.setUser(user);
-            attender.setFirstName(request.getFirstName());
-            attender.setLastName(request.getLastName());
-            attender.setSchool(school);
-            attenderRepository.save(attender);
-            SignupResponse response = new SignupResponse(request.getUsername(), request.getPhone());
-            return new ResponseEntity<SignupResponse>(response, HttpStatus.CREATED);
+        // Check for duplicate smAttenderId
+        if (attenderRepository.findBySmAttenderId(request.getSmAttenderId()).isPresent()) {
+            return ResponseEntity
+                    .status(HttpStatus.CONFLICT)
+                    .body("smAttenderId already exists! Please use a unique value.");
+        }
+        School school = schoolRepository.findById(request.getSchoolId())
+                .orElseThrow(() -> new RuntimeException("Error: School not found with id  "+request.getSchoolId()));
+        User user = userService.registerUser(request, UserType.ATTENDER.name(),false);
+        Route route = routeService.getRouteById(request.getRouteId());
+        Attender attender = new Attender();
+        attender.setUser(user);
+        attender.setFirstName(request.getFirstName());
+        attender.setLastName(request.getLastName());
+        attender.setSchool(school);
+        attender.setSmAttenderId(request.getSmAttenderId());
+        attenderRepository.save(attender);
+        SignupResponse response = new SignupResponse(request.getUsername(), request.getPhone());
+        return new ResponseEntity<SignupResponse>(response, HttpStatus.CREATED);
     }
 
     /**
@@ -86,42 +93,42 @@ public class AttenderController {
 
     @PutMapping("/update/{id}")
     @Transactional
-    public ResponseEntity<?> updateAttenderInfo(@PathVariable String id, @Valid @RequestBody AttenderUpdateReq updateReq){
+    public ResponseEntity<?> updateAttenderInfo(@PathVariable String id, @Valid @RequestBody AttenderUpdateReq updateReq) {
         Optional<Attender> attenderOptional = attenderRepository.findBySmAttenderId(id);
-        if(!attenderOptional.isPresent())
+        if (!attenderOptional.isPresent())
             return ResponseEntity.ofNullable("Attender is not found with Id " + id);
 
-        //For updating user Details
-        Optional<User> userOptional = userRepository.findById(attenderOptional.get().getUser().getId());
-        User user = null;
-        if(userOptional.isPresent()){
-            user = userOptional.get();
-            if(updateReq.getPhone() != null && !updateReq.getPhone().isEmpty())
+        Attender attender = attenderOptional.get();
+
+        // Update user details
+        Optional<User> userOptional = userRepository.findById(attender.getUser().getId());
+        if (userOptional.isPresent()) {
+            User user = userOptional.get();
+            if (updateReq.getPhone() != null && !updateReq.getPhone().isEmpty())
                 user.setPhone(updateReq.getPhone());
-            if(updateReq.getEmail() != null && !updateReq.getEmail().isEmpty())
+            if (updateReq.getEmail() != null && !updateReq.getEmail().isEmpty())
                 user.setEmail(updateReq.getEmail());
 
-            user = userRepository.save(user);
+            userRepository.save(user);
+            attender.setUser(user);
         }
 
-        Attender attender = new Attender();
-        attender.setId(attenderOptional.get().getId());
-        attender.setSmAttenderId(id);
-        attender.setFirstName(updateReq.getFirstName());
-        attender.setLastName(updateReq.getLastName());
-        if(updateReq.getRouteId() != null && !updateReq.getRouteId().isEmpty()){
+        if (updateReq.getFirstName() != null) {
+            attender.setFirstName(updateReq.getFirstName());
+        }
+        if (updateReq.getLastName() != null) {
+            attender.setLastName(updateReq.getLastName());
+        }
+        if (updateReq.getRouteId() != null && !updateReq.getRouteId().isEmpty()) {
             Route route = routeService.getRouteBySmId(updateReq.getRouteId());
             attender.setRoute(route);
         }
-        if(updateReq.getSchoolId() != null && !updateReq.getSchoolId().isEmpty()){
+        if (updateReq.getSchoolId() != null && !updateReq.getSchoolId().isEmpty()) {
             Optional<School> school = schoolRepository.findById(updateReq.getSchoolId());
-            if(school.isPresent())
-                attender.setSchool(school.get());
+            school.ifPresent(attender::setSchool);
         }
-        attender.setUser(user);
-        attenderRepository.save(attender);
 
+        attenderRepository.save(attender);
         return ResponseEntity.ok("Attender updated successfully for ID " + id);
     }
-
 }

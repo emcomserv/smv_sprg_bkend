@@ -25,8 +25,10 @@ public class RoutePointRegistrationReq {
     private String longitude;
 
     private Boolean status;
-
     private String reserve;
-
     private String content;
+    private String schoolId;
+    private String smRoutePointId;
+
+
 }
