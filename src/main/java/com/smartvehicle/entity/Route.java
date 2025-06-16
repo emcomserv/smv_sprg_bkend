@@ -37,6 +37,9 @@ public class Route extends BaseEntity{
 
     @Column(name = "content", length = 255)
     private String content;
+
+    @Column(name = "city_code",length = 255)
+    private  String cityCode;
     @OneToMany(mappedBy = "route",fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private List<RoutePoint> routePoints;
     @ManyToOne

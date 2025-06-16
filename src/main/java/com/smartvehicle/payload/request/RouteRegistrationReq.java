@@ -25,4 +25,6 @@ public class RouteRegistrationReq {
 
     @NotNull(message = "School ID is required")
     private String schoolId;
+
+    private String cityCode;
 }

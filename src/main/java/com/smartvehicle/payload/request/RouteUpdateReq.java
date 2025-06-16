@@ -15,5 +15,5 @@ public class RouteUpdateReq {
     private String smRouteId;
     private String content;
     private String schoolId;
-
+    private String cityCode;
 }

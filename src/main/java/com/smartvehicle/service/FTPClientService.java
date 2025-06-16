@@ -49,13 +49,13 @@ public class FTPClientService {
     @Value("${ftp.use.passive:true}")
     private boolean usePassive;
 
-    @Value("${ftp.timeout:60000}")
+    @Value("${ftp.timeout:2000}")
     private int uploadTimeout;
 
     private FTPClient ftpClient;
     private final Set<String> createdDirectories = new HashSet<>();
     private static final int MAX_RETRIES = 3;
-    private static final int RESPONSE_TIMEOUT = 10000; // 60 seconds
+    private static final int RESPONSE_TIMEOUT = 2000; // 2 seconds
 
     @PostConstruct
     public void init() throws IOException {

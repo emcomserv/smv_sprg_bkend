@@ -90,6 +90,7 @@ public class SecurityConfig  {
                                                 "/swagger-ui.html"  // Swagger entry point
                                         ).permitAll()
                                         .requestMatchers("/api/v1/auth/**").permitAll()
+                                        .requestMatchers("/ws/**").permitAll()
 //                                        .requestMatchers("/smartVehicle/parent/**").hasAuthority("PARENT") // Parent role
 //                                        .requestMatchers("/smartVehicle/admin/**").hasAuthority("ADMIN") // Admin role
                                         .anyRequest()

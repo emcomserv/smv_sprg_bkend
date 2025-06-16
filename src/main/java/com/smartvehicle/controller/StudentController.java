@@ -1,9 +1,5 @@
 package com.smartvehicle.controller;
 
-import com.smartvehicle.repository.RouteSchlStudentMappingRepo;
-import com.smartvehicle.repository.SwipeReportMobileRepository;
-
-
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smartvehicle.entity.*;
@@ -14,19 +10,21 @@ import com.smartvehicle.payload.request.StudentSignupReq;
 import com.smartvehicle.payload.response.StudentResponseDTO;
 import com.smartvehicle.payload.response.StudentResponseLtDTO;
 import com.smartvehicle.repository.*;
-import com.smartvehicle.repository.ParentRepository;
-import com.smartvehicle.repository.SchoolRepository;
-import com.smartvehicle.repository.StudentRepository;
 import com.smartvehicle.service.RouteService;
 import com.smartvehicle.service.StudentService;
 import com.smartvehicle.service.UserService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.event.EventListener;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
+import org.springframework.messaging.simp.user.SimpUserRegistry;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.socket.messaging.SessionSubscribeEvent;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -60,6 +58,10 @@ public class StudentController {
     private RouteSchlStudentMappingRepo routeSchlStudentMappingRepo;
     @Autowired
     private RouteRepository routeRepository;
+    @Autowired
+    private SimpMessagingTemplate messagingTemplate;
+    @Autowired
+    private SimpUserRegistry simpUserRegistry;
 
     @PostMapping("/register")
     @Transactional
@@ -91,7 +93,7 @@ public class StudentController {
 
         Student student1 = studentRepository.save(student);
 
-        //Saving data to mapping table
+        // Saving data to mapping table
         RouteSchoolStudentMapping routeSchoolStudentMapping = new RouteSchoolStudentMapping();
         routeSchoolStudentMapping.setRoute(student1.getRoute());
         routeSchoolStudentMapping.setSmStudentId(student1.getSmStudentId());
@@ -161,10 +163,9 @@ public class StudentController {
         // Validate input format
         if (!input.matches("^[A-Za-z0-9]+-[A-Za-z0-9]+-[A-Za-z0-9]+$")) {
             response.put("status", "Invalid");
-            response.put("message", "Invalid input format. Expected format: ROUTE-SCHOOL-STUDENT");
+            response.put("message", "Invalid input format. Expected format: SCHOOLID-ROUTEID-CITYCODESTUDENTID");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
-
         // Parse and validate coordinates
         double lat, lon;
         try {
@@ -190,8 +191,8 @@ public class StudentController {
 
         // Extract IDs
         String[] inputParts = input.split("-");
-        String routeId = inputParts[0].toUpperCase();
-        String schoolId = inputParts[1].toUpperCase();
+        String schoolId = inputParts[0].toUpperCase();
+        String routeId = inputParts[1].toUpperCase();
         String studentIdWithCityCode = inputParts[2].toUpperCase();
 
         // Validate routeId is not empty or malformed
@@ -201,12 +202,13 @@ public class StudentController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
 
-        // Extract sm_student_id by removing the first 3 characters (city code)
+        // Extract sm_student_id and cityCode
         if (studentIdWithCityCode.length() <= 3) {
             response.put("status", "Invalid");
             response.put("message", "Invalid student ID format: Too short to contain a city code");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
+        String cityCode = studentIdWithCityCode.substring(0, 3);
         String studentId = studentIdWithCityCode.substring(3);
 
         // Validate ID formats
@@ -259,12 +261,21 @@ public class StudentController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
 
+        // Validate cityCode matches the route's cityCode
+        String routeCityCode = route.getCityCode();
+        System.out.println("Route's city code for " + routeId + ": " + routeCityCode + ", Input city code: " + cityCode);
+        if (routeCityCode == null || !cityCode.equals(routeCityCode)) {
+            response.put("status", "Invalid");
+            response.put("message", "City code " + cityCode + " does not match the route's city code");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+
         // Construct the full FTP file path (including filename)
-        String ftpPath = String.format("/upload/%s/%s/Default/%s", schoolId, studentId,imageName);
+        String ftpPath = String.format("/upload/%s/%s/%s", schoolId, studentId, imageName);
 
         // Prepare payload for Python Analyzer
         Map<String, String> payload = new HashMap<>();
-        payload.put("ftpPath", ftpPath); // Send full file path
+        payload.put("ftpPath", ftpPath);
         payload.put("schoolId", schoolId);
         payload.put("studentId", studentId);
 
@@ -284,10 +295,7 @@ public class StudentController {
              PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
              BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
 
-            // Send JSON payload to Python Analyzer
             out.println(jsonPayload);
-
-            // Receive response from Python Analyzer
             analyzerResponse = in.readLine();
             if (analyzerResponse == null) {
                 response.put("status", "Error");
@@ -301,50 +309,89 @@ public class StudentController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
 
-        // Parse Python Analyzer's response (expected format: "student ID=found, image=matched, 85%")
+        // Parse Python Analyzer's response
         boolean studentIdFound = false;
-        boolean imageMatched = false;
         double confidence = 0.0;
+        String schoolIdPython = null;
+        String studentIdPython = null;
+        String imageId = null;
+        boolean confidenceFound = false;
+
         try {
+            System.out.println("Analyzer Response: " + analyzerResponse);
             String[] parts = analyzerResponse.split(",");
             for (String part : parts) {
                 part = part.trim();
                 if (part.startsWith("student ID=")) {
-                    studentIdFound = part.split("=")[1].equals("found");
-                } else if (part.startsWith("image=")) {
-                    imageMatched = part.split("=")[1].equals("matched");
+                    studentIdFound = part.split("=", 2)[1].equals("found");
+                } else if (part.startsWith("school_id=")) {
+                    String[] split = part.split("=", 2);
+                    schoolIdPython = split.length > 1 ? split[1] : null;
+                } else if (part.startsWith("student_id=")) {
+                    String[] split = part.split("=", 2);
+                    studentIdPython = split.length > 1 ? split[1] : null;
+                } else if (part.startsWith("image_base64=")) {
+                    String[] split = part.split("=", 2);
+                    imageId = split.length > 1 ? split[1] : null;
                 } else if (part.endsWith("%")) {
-                    confidence = Double.parseDouble(part.replace("%", ""));
+                    try {
+                        confidence = Double.parseDouble(part.replace("%", "").trim());
+                        confidenceFound = true;
+                    } catch (NumberFormatException e) {
+                        throw new IllegalArgumentException("Invalid confidence format: " + part);
+                    }
                 }
             }
+
+            if (!confidenceFound) {
+                response.put("schoolId", schoolIdPython);
+                response.put("studentId", studentIdPython);
+                response.put("status", "Invalid");
+                response.put("message", "Image not Captured or processing failed");
+                response.put("confidence",confidence);
+                response.put("isValid", false);
+                messagingTemplate.convertAndSend("/topic/validation", response);
+                return ResponseEntity.ok(response);
+            }
+
         } catch (Exception e) {
             response.put("status", "Error");
-            response.put("message", "Invalid response format from Python Analyzer: " + analyzerResponse);
+            response.put("message", "Invalid response format from Python Analyzer: " + analyzerResponse + "; Error: " + e.getMessage());
+            response.put("schoolId", schoolIdPython);
+            response.put("studentId", studentIdPython);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
 
-        // Validate analyzer response
-        if (!studentIdFound || !imageMatched) {
-            response.put("status", "Invalid");
-            response.put("message", "Student verification failed: ID or image not matched");
-            response.put("isValid", false);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
-        }
-
-        // Check confidence threshold (e.g., 70%)
+        // Check confidence threshold
         double confidenceThreshold = 70.0;
-        if (confidence < confidenceThreshold) {
+        if (confidence <= confidenceThreshold) {
+            response.put("schoolId", schoolIdPython);
+            response.put("studentId", studentIdPython);
             response.put("status", "Invalid");
-            response.put("message", "Student verification failed: Confidence (" + confidence + "%) below threshold (" + confidenceThreshold + "%)");
-            response.put("isValid", false);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            response.put("message", "Student verification failed: Confidence (" + confidence + "%) below or equal to threshold (" + confidenceThreshold + "%)");
+            response.put("base64", imageId);
+            messagingTemplate.convertAndSend("/topic/validation", response);
+            return ResponseEntity.ok(response);
         }
 
-        // All checks passed, student entry is accepted
+        // All checks passed
+        response.put("schoolId", schoolIdPython);
+        response.put("studentId", studentIdPython);
         response.put("status", "Valid");
         response.put("isValid", true);
         response.put("confidence", confidence);
         response.put("message", "Student Entry = Accepted");
+        Student studentForFeeStatus = studentRepository.findBySmStudentId(studentIdPython).orElse(null);
+        if (studentForFeeStatus != null) {
+            Boolean status = studentForFeeStatus.getStatus();
+            String feeStatus = (status != null && !status) ? "Fee Pending" : (status != null && status) ? "Fee Paid" : "Unknown";
+            response.put("feeStatus", feeStatus);
+        } else {
+            response.put("feeStatus", "Unknown");
+        }
+        response.put("base64", imageId);
+        System.out.println("Final response map: " + response);
+        messagingTemplate.convertAndSend("/topic/validation", response);
 
         SwipeReportMobile swipeReportMobile = new SwipeReportMobile();
         swipeReportMobile.setRouteId(routeId);
@@ -352,7 +399,7 @@ public class StudentController {
         swipeReportMobile.setStudentId(studentId);
         swipeReportMobile.setLatitude(latitude);
         swipeReportMobile.setLongitude(longitude);
-        swipeReportMobile.setImageName(imageName); // Not used since image is uploaded directly to FTP
+        swipeReportMobile.setImageName(imageName);
         swipeReportMobileRepository.save(swipeReportMobile);
 
         return ResponseEntity.ok(response);
@@ -365,7 +412,6 @@ public class StudentController {
         if (students.isEmpty()) {
             return ResponseEntity.noContent().build();
         }
-
         return ResponseEntity.ok(studentResponseDTOS);
     }
 
@@ -373,85 +419,85 @@ public class StudentController {
     public ResponseEntity<StudentResponseDTO> updateStudentBySmStudentId(
             @RequestParam String smStudentId,
             @RequestBody StudentSignupReq request) {
-
-        // Find the student by sm_student_id
         Student student = studentRepository.findBySmStudentId(smStudentId)
                 .orElseThrow(() -> new RuntimeException("Student not found with sm_student_id: " + smStudentId));
 
-        // Update fields if present in request
         if (request.getFirstName() != null) {
             student.setFirstName(request.getFirstName());
         }
-
         if (request.getLastName() != null) {
             student.setLastName(request.getLastName());
         }
-
         if (request.getAge() != null) {
             student.setAge(request.getAge());
         }
-
         if (request.getGender() != null) {
             student.setGender(request.getGender());
         }
-
         if (request.getLongitude() != null) {
             student.setLongitude(request.getLongitude());
         }
-
         if (request.getLatitude() != null) {
             student.setLatitude(request.getLatitude());
         }
-
         if (request.getStatus() != null) {
             student.setStatus(request.getStatus());
         }
-
-        // Update School if provided
         if (request.getSchoolId() != null) {
             School school = schoolRepository.findById(request.getSchoolId())
                     .orElseThrow(() -> new RuntimeException("School not found with ID: " + request.getSchoolId()));
             student.setSchool(school);
         }
-
-        // Update Parent if provided
         if (request.getParentId() != null) {
             Parent parent = parentRepository.findById(request.getParentId())
                     .orElseThrow(() -> new RuntimeException("Parent not found with ID: " + request.getParentId()));
             student.setParent(parent);
         }
-
-        // Update Route and RoutePoint if provided
         if (request.getRouteId() != null) {
             Route route = routeService.getRouteById(request.getRouteId());
             student.setRoute(route);
-
             if (request.getRoutePointId() != null) {
                 RoutePoint routePoint = routeService.getRoutePointById(request.getRoutePointId());
                 student.setRoutePoint(routePoint);
             }
         }
 
-        // Save the updated student
         Student updatedStudent = studentRepository.save(student);
-
-        // Map the updated student to StudentResponseDTO
         StudentResponseDTO responseDTO = studentMapper.toResponseDTO(updatedStudent);
-
         return ResponseEntity.ok(responseDTO);
+    }
+
+    @GetMapping("/test-websocket")
+    public ResponseEntity<String> testWebSocket() {
+        Map<String, Object> testResponse = new HashMap<>();
+        testResponse.put("status", "Test");
+        testResponse.put("message", "This is a test message");
+        testResponse.put("isValid", true);
+        testResponse.put("schoolId", "TEST_SCHOOL");
+        testResponse.put("studentId", "TEST_STUDENT");
+        messagingTemplate.convertAndSend("/topic/validation", testResponse);
+        return ResponseEntity.ok("Test message sent to /topic/validation");
     }
 
     @GetMapping("/by-smStudentId")
     public ResponseEntity<StudentResponseDTO> getStudentBySmStudentId(
             @RequestParam String smStudentId) {
-
-        // Fetch student by sm_student_id
         Student student = studentRepository.findBySmStudentId(smStudentId)
                 .orElseThrow(() -> new RuntimeException("Student not found with sm_student_id: " + smStudentId));
-
-        // Map the student entity to StudentResponseDTO using MapStruct
         StudentResponseDTO responseDTO = studentMapper.toResponseDTO(student);
-
         return ResponseEntity.ok(responseDTO);
+    }
+
+    @EventListener
+    public void handleSubscription(SessionSubscribeEvent event) {
+        StompHeaderAccessor headerAccessor = StompHeaderAccessor.wrap(event.getMessage());
+        String destination = headerAccessor.getDestination();
+        if ("/topic/validation".equals(destination)) {
+            Map<String, Object> subscribeResponse = new HashMap<>();
+            subscribeResponse.put("status", "Subscribed");
+            subscribeResponse.put("message", "Successfully subscribed to /topic/validation");
+            subscribeResponse.put("destination", destination);
+            messagingTemplate.convertAndSend("/topic/validation", subscribeResponse);
+        }
     }
 }

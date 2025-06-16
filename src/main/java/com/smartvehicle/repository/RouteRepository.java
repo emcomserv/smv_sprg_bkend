@@ -38,7 +38,7 @@ public interface RouteRepository extends JpaRepository<Route,Long> {
     @Modifying
     @Query(
             value = "UPDATE smv_route r SET r.sch_id = ?1, route_name = ?2, title = ?3, " +
-                    "status = ?4, reserve = ?5, content = ?6 where sm_route_id = ?7",
+                    "status = ?4, reserve = ?5, content = ?6, city_code = ?7 where sm_route_id = ?8",
             nativeQuery = true)
-    void updateRoute(String schId, String routeName, String title, boolean status, int reserve, String content, String smRouteId);
+    void updateRoute(String schId, String routeName, String title, boolean status, int reserve, String content, String cityCode, String smRouteId);
 }

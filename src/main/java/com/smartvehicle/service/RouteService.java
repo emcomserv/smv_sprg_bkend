@@ -1,6 +1,5 @@
 package com.smartvehicle.service;
 
-
 import com.smartvehicle.entity.PassengerInfo;
 import com.smartvehicle.entity.Route;
 import com.smartvehicle.entity.RoutePoint;
@@ -55,6 +54,7 @@ public class RouteService {
         route.setSmRouteId(request.getSmRouteId());
         route.setContent(request.getContent());
         route.setSchool(school);
+        route.setCityCode(request.getCityCode());
         routeRepository.save(route);
         return new RouteRegResDTO(route.getId(), route.getRouteName(), route.getTitle(), route.getStatus(), school.getName());
     }
@@ -88,7 +88,6 @@ public class RouteService {
     public List<Route> getRoutesBySMAdminId(String smAdminId) {
         return routeRepository.findBySMRoute_Id(smAdminId);
     }
-
 
     public List<PassengerInfoResponse> getAllPassengerInfo() {
         return passengerInfoRepository.fetchPassengerInfo();
@@ -124,11 +123,9 @@ public class RouteService {
         routePoint.setSmRoutePointId(request.getSmRoutePointId());
         routePointRepository.save(routePoint);
 
-
         // Return a response DTO
         return routePoint;
     }
-
 
     public PassengerInfoDTO addPassengerInfo(PassengerInfoRequest request) {
 
@@ -166,6 +163,7 @@ public class RouteService {
         if (updateReq.getReserve() != null) route.setReserve(updateReq.getReserve());
         if (updateReq.getContent() != null) route.setContent(updateReq.getContent());
         if (updateReq.getSmRouteId() != null) route.setSmRouteId(updateReq.getSmRouteId());
+        if (updateReq.getCityCode() != null) route.setCityCode(updateReq.getCityCode());
 
         if (updateReq.getSchoolId() != null && !updateReq.getSchoolId().isEmpty()) {
             Optional<School> school = schoolRepository.findById(updateReq.getSchoolId());

@@ -17,4 +17,5 @@ public class RouteResponseDTO {
     private String content;
     private String smRouteId;
     private List<RoutePointResponseDTO> routePoints;
+    private String cityCode;
 }

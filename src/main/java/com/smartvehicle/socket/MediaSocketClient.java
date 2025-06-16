@@ -10,9 +10,9 @@ import java.util.List;
 @Slf4j
 public class MediaSocketClient {
 
-    private static final String SERVER_ADDRESS = "68.178.203.99";
+    private static final String SERVER_ADDRESS = "127.0.0.1";
     private static final int PORT = 5001;
-    private static final int TIMEOUT = 10000; // 10 seconds
+    private static final int TIMEOUT = 10000; // 2 seconds
 
     // Deprecated: Only needed if sending raw image bytes
     public static byte[] sendImageDataToPython(Long id, String schoolId, String studentId, String format, byte[] imageData,
