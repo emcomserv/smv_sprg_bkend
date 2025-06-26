@@ -1,0 +1,5 @@
+services: 
+  app: 
+    image: smart_vehicle:1.0
+    volumes:
+      - ./logs:/app/logs
