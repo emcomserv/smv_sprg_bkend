@@ -18,20 +18,20 @@ pipeline {
                 sh 'docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .'
             }
         }
-    //     stage('Deploy using Docker Compose') {
-    //         steps {
-    //             sh 'docker-compose down || true'
-    //             sh 'docker-compose up -d'
-    //         }
-    //     }
+        stage('Deploy using Docker Compose') {
+            steps {
+                sh 'docker-compose down || true'
+                sh 'docker-compose up -d'
+            }
+        }
      }
 
-    // post {
-    //     success {
-    //         echo "✅ Deployment successful"
-    //     }
-    //     failure {
-    //         echo "❌ Deployment failed"
-    //     }
-    // }
+    post {
+        success {
+            echo "✅ Deployment successful"
+        }
+        failure {
+            echo "❌ Deployment failed"
+        }
+    }
 }
