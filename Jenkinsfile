@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = 'smart_vehicle' 
+        IMAGE_NAME = 'smart_vehicle'
         IMAGE_TAG = '1.0'
     }
 
@@ -13,21 +13,15 @@ pipeline {
             }
         }
 
-        stage('Build JAR using Docker (Multi-stage)') {
+        stage('Build & Deploy using Docker Compose') {
             steps {
-                sh 'docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .'
-            }
-        }
-        stage('Deploy using Docker Compose') {
-            steps {
-               sh '''
-                    cd /home/appusr/application/smv_sprg_bkend
+                sh '''
                     docker compose down || true
-                    docker compose up -d
+                    docker compose up -d --build
                 '''
             }
         }
-     }
+    }
 
     post {
         success {
