@@ -1,5 +1,21 @@
-services: 
-  app: 
-    image: smart_vehicle:1.0
+version: "3.8"
+
+services:
+  smartvehicle-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    network_mode: host
+
     volumes:
       - ./logs:/app/logs
+      - /home/appusr/application/smv_sprg_bkend/src/main/resources/application.properties:/app/classes/application.properties
+      - /home/appusr/application/smv_sprg_bkend/src/main/resources/trakme-6ea58-cb7061e0641c.json:/app/creds/trakme-6ea58-cb7061e0641c.json
+
+    environment:
+      - SPRING_CONFIG_LOCATION=file:/app/classes/application.properties
+      - FIREBASE_CONFIG_PATH=/app/creds/trakme-6ea58-cb7061e0641c.json
+
+    restart: unless-stopped
+
