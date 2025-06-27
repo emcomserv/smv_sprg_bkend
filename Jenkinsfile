@@ -13,11 +13,11 @@ pipeline {
             }
         }
 
-    //     stage('Build JAR using Docker (Multi-stage)') {
-    //         steps {
-    //             sh 'docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .'
-    //         }
-    //     }
+        stage('Build JAR using Docker (Multi-stage)') {
+            steps {
+                sh 'docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .'
+            }
+        }
     //     stage('Deploy using Docker Compose') {
     //         steps {
     //             sh 'docker-compose down || true'
