@@ -15,7 +15,7 @@ pipeline {
 
         stage('Copy Firebase JSON') {
             steps {
-                sh 'cp /home/appusr/application/smv_sprg_bkend/src/main/resources/trakme-6ea58-cb7061e0641c.json ./src/main/resources/trakme-6ea58-cb7061e0641c.json'
+                sh 'cp /home/appusr/application/smv_sprg_bkend/src/main/resources/trakme-6ea58-cb7061e0641c.json src/main/resources'
             }
         }
         
