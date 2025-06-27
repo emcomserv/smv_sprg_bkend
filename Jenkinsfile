@@ -20,6 +20,7 @@ pipeline {
         }
         stage('Deploy using Docker Compose') {
             steps {
+                cd /home/appusr/application/smv_sprg_bkend
                 sh 'docker compose down || true'
                 sh 'docker compose up -d'
             }
