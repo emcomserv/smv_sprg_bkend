@@ -17,4 +17,5 @@ public interface RouteMapper {
     RouteResponseLtDTO toResponseLtDTO(Route route);
 
     List<RouteResponseLtDTO> toResponseLtDTO(List<Route> routes);
+
 }

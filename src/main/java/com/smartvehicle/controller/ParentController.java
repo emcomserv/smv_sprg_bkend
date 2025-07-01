@@ -133,4 +133,11 @@ public class ParentController {
         return ResponseEntity.ok(responseDTO);
     }
 
+    @GetMapping("/by-school")
+    public ResponseEntity<List<ParentResponseDTO>> getParentsBySchoolId(@RequestParam String schoolId) {
+        List<Parent> parents = parentRepository.findBySchool_Id(schoolId);
+        List<ParentResponseDTO> response = parentMapper.toResponseDTO(parents);
+        return ResponseEntity.ok(response);
+    }
+
 }

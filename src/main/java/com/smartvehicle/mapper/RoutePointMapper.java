@@ -7,5 +7,7 @@ import org.mapstruct.Mapper;
 @Mapper(componentModel = "spring")
 public interface RoutePointMapper {
     RoutePointResponseDTO toResponseDTO(RoutePoint routePoint);
+    java.util.List<RoutePointResponseDTO> toResponseDTO(java.util.List<RoutePoint> routePoints);
+
 }
 

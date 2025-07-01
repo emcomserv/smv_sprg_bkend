@@ -291,7 +291,7 @@ public class StudentController {
 
         // Send payload to Python Analyzer via socket communication
         String analyzerResponse;
-        try (Socket socket = new Socket("127.0.0.1", 5004);
+        try (Socket socket = new Socket("127.0.0.1",5004);
              PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
              BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
 
@@ -309,98 +309,100 @@ public class StudentController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
 
-        // Parse Python Analyzer's response
-        boolean studentIdFound = false;
+        // Initialize response variables
         double confidence = 0.0;
-        String schoolIdPython = null;
-        String studentIdPython = null;
-        String imageId = null;
-        boolean confidenceFound = false;
+        String schoolIdPython = schoolId;
+        String studentIdPython = studentId;
+        String imageId = "";
+        String message = "Error";
 
         try {
             System.out.println("Analyzer Response: " + analyzerResponse);
             String[] parts = analyzerResponse.split(",");
-            for (String part : parts) {
-                part = part.trim();
-                if (part.startsWith("student ID=")) {
-                    studentIdFound = part.split("=", 2)[1].equals("found");
-                } else if (part.startsWith("school_id=")) {
-                    String[] split = part.split("=", 2);
-                    schoolIdPython = split.length > 1 ? split[1] : null;
-                } else if (part.startsWith("student_id=")) {
-                    String[] split = part.split("=", 2);
-                    studentIdPython = split.length > 1 ? split[1] : null;
-                } else if (part.startsWith("image_base64=")) {
-                    String[] split = part.split("=", 2);
-                    imageId = split.length > 1 ? split[1] : null;
+            String code = parts[0].trim();
+
+            // Parse key-value pairs
+            for (int i = 1; i < parts.length; i++) {
+                String part = parts[i].trim();
+                if (part.contains("=")) {
+                    String[] keyValue = part.split("=", 2);
+                    String key = keyValue[0].trim();
+                    String value = keyValue.length > 1 ? keyValue[1].trim() : "";
+                    if (key.equals("school_id")) {
+                        schoolIdPython = value;
+                    } else if (key.equals("student_id")) {
+                        studentIdPython = value;
+                    } else if (key.equals("image_base64") || key.equals("image_bace64")) {
+                        imageId = value;
+                    }
                 } else if (part.endsWith("%")) {
                     try {
                         confidence = Double.parseDouble(part.replace("%", "").trim());
-                        confidenceFound = true;
                     } catch (NumberFormatException e) {
                         throw new IllegalArgumentException("Invalid confidence format: " + part);
                     }
                 }
             }
 
-            if (!confidenceFound) {
-                response.put("schoolId", schoolIdPython);
-                response.put("studentId", studentIdPython);
-                response.put("status", "Invalid");
-                response.put("message", "Image not Captured or processing failed");
-                response.put("confidence",confidence);
-                response.put("isValid", false);
-                messagingTemplate.convertAndSend("/topic/validation", response);
-                return ResponseEntity.ok(response);
+            // Set message based on code
+            switch (code) {
+                case "00":
+                    message = confidence > 70.0 ? "00" : "01";
+                    break;
+                case "01":
+                    message = "01";
+                    break;
+                case "02":
+                    message = "02";
+                    break;
+                case "03":
+                    message = "03";
+                    break;
+                case "04/Clear":
+                    message = "04";
+                    break;
+                case "05":
+                    message = "05";
+                    break;
+                default:
+                    message = "Error";
             }
 
         } catch (Exception e) {
-            response.put("status", "Error");
-            response.put("message", "Invalid response format from Python Analyzer: " + analyzerResponse + "; Error: " + e.getMessage());
-            response.put("schoolId", schoolIdPython);
-            response.put("studentId", studentIdPython);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+            message = "Error";
+            System.out.println("Error parsing analyzer response: " + e.getMessage());
         }
 
-        // Check confidence threshold
-        double confidenceThreshold = 70.0;
-        if (confidence <= confidenceThreshold) {
-            response.put("schoolId", schoolIdPython);
-            response.put("studentId", studentIdPython);
-            response.put("status", "Invalid");
-            response.put("message", "Student verification failed: Confidence (" + confidence + "%) below or equal to threshold (" + confidenceThreshold + "%)");
-            response.put("base64", imageId);
-            messagingTemplate.convertAndSend("/topic/validation", response);
-            return ResponseEntity.ok(response);
-        }
-
-        // All checks passed
+        // Build response
+        response.put("message", message);
         response.put("schoolId", schoolIdPython);
         response.put("studentId", studentIdPython);
-        response.put("status", "Valid");
-        response.put("isValid", true);
-        response.put("confidence", confidence);
-        response.put("message", "Student Entry = Accepted");
-        Student studentForFeeStatus = studentRepository.findBySmStudentId(studentIdPython).orElse(null);
-        if (studentForFeeStatus != null) {
-            Boolean status = studentForFeeStatus.getStatus();
-            String feeStatus = (status != null && !status) ? "Fee Pending" : (status != null && status) ? "Fee Paid" : "Unknown";
-            response.put("feeStatus", feeStatus);
-        } else {
-            response.put("feeStatus", "Unknown");
-        }
         response.put("base64", imageId);
-        System.out.println("Final response map: " + response);
+        response.put("confidence", confidence);
+        if (message.equals("00")) {
+            Student studentForFeeStatus = studentRepository.findBySmStudentId(studentIdPython).orElse(null);
+            if (studentForFeeStatus != null) {
+                Boolean feeStatus = studentForFeeStatus.getStatus();
+                response.put("feeStatus", (feeStatus != null && !feeStatus) ? "Fee Pending" : (feeStatus != null && feeStatus) ? "Fee Paid" : "Unknown");
+            } else {
+                response.put("feeStatus", "Unknown");
+            }
+        }
+
+        // Send to WebSocket
         messagingTemplate.convertAndSend("/topic/validation", response);
 
-        SwipeReportMobile swipeReportMobile = new SwipeReportMobile();
-        swipeReportMobile.setRouteId(routeId);
-        swipeReportMobile.setSchoolId(schoolId);
-        swipeReportMobile.setStudentId(studentId);
-        swipeReportMobile.setLatitude(latitude);
-        swipeReportMobile.setLongitude(longitude);
-        swipeReportMobile.setImageName(imageName);
-        swipeReportMobileRepository.save(swipeReportMobile);
+        // Save swipe report if validation is successful
+        if (message.equals("00")) {
+            SwipeReportMobile swipeReportMobile = new SwipeReportMobile();
+            swipeReportMobile.setRouteId(routeId);
+            swipeReportMobile.setSchoolId(schoolId);
+            swipeReportMobile.setStudentId(studentId);
+            swipeReportMobile.setLatitude(latitude);
+            swipeReportMobile.setLongitude(longitude);
+            swipeReportMobile.setImageName(imageName);
+            swipeReportMobileRepository.save(swipeReportMobile);
+        }
 
         return ResponseEntity.ok(response);
     }
@@ -414,7 +416,6 @@ public class StudentController {
         }
         return ResponseEntity.ok(studentResponseDTOS);
     }
-
     @PutMapping("/update")
     public ResponseEntity<StudentResponseDTO> updateStudentBySmStudentId(
             @RequestParam String smStudentId,

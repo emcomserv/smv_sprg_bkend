@@ -1,11 +1,13 @@
 package com.smartvehicle.controller;
 
+import com.smartvehicle.entity.Route;
+import com.smartvehicle.entity.RoutePoint;
+import com.smartvehicle.mapper.RouteMapper;
 import com.smartvehicle.mapper.RoutePointMapper;
 import com.smartvehicle.payload.request.*;
-import com.smartvehicle.service.RouteService;
-import com.smartvehicle.entity.*;
-import com.smartvehicle.mapper.RouteMapper;
 import com.smartvehicle.payload.response.*;
+import com.smartvehicle.repository.RoutePointRepository;
+import com.smartvehicle.service.RouteService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -26,6 +28,9 @@ public class RouteController {
     private RouteMapper routeMapper;
     @Autowired
     private RoutePointMapper routePointMapper;
+    @Autowired
+    private RoutePointRepository routePointRepository;
+
     @PostMapping("/register")
     public ResponseEntity<RouteRegResDTO> registerRoute(@Valid @RequestBody RouteRegistrationReq request) {
             RouteRegResDTO response = routeService.registerRoute(request);
@@ -116,6 +121,20 @@ public class RouteController {
     @PutMapping("update/{id}")
     public ResponseEntity<?> updateRouteInfo(@PathVariable String id, @Valid @RequestBody RouteUpdateReq updateReq) {
         return routeService.updateRouteInfo(id, updateReq);
+    }
+
+    @GetMapping("/{routeId}/route-points")
+    public ResponseEntity<List<RoutePointResponseDTO>> getRoutePointsByRouteId(@PathVariable Long routeId) {
+        List<RoutePoint> routePoints = routePointRepository.findByRoute_Id(routeId);
+        List<RoutePointResponseDTO> response = routePointMapper.toResponseDTO(routePoints);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/smid/{smRouteId}/route-points")
+    public ResponseEntity<List<RoutePointResponseDTO>> getRoutePointsBySmRouteId(@PathVariable String smRouteId) {
+        List<RoutePoint> routePoints = routePointRepository.findByRoute_SmRouteId(smRouteId);
+        List<RoutePointResponseDTO> response = routePointMapper.toResponseDTO(routePoints);
+        return ResponseEntity.ok(response);
     }
 
 }
