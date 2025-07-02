@@ -68,7 +68,6 @@ public class StudentController {
     public ResponseEntity<?> registerUser(@Valid @RequestBody StudentSignupReq request) throws Exception {
         School school = schoolRepository.findById(request.getSchoolId())
                 .orElseThrow(() -> new RuntimeException("Error: School not found with id  " + request.getSchoolId()));
-        User user = userService.registerUser(request, UserType.STUDENT.name(), false);
         Parent parent = parentRepository.findById(request.getParentId())
                 .orElseThrow(() -> new RuntimeException("Error: Parent not found with id  " + request.getParentId()));
         Student student = new Student();
@@ -102,7 +101,7 @@ public class StudentController {
 
         routeSchlStudentMappingRepo.save(routeSchoolStudentMapping);
 
-        StudentResponseDTO studentResponseDTO = studentMapper.toResponseDTO(student);
+        StudentResponseDTO studentResponseDTO = studentMapper.toResponseDTO(student1);
         return new ResponseEntity<StudentResponseDTO>(studentResponseDTO, HttpStatus.CREATED);
     }
 
