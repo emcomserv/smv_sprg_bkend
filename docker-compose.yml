@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
 
     ports:
-       - "7081:7080"
+       - "7080:7080"
 
     volumes:
       - ./logs:/app/logs
