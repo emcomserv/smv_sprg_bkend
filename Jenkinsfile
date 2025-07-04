@@ -47,9 +47,10 @@ pipeline {
 
                         # SSH as root, move tar, load image, and use docker-compose
                         sshpass -p ${SSH_PASS} ssh -o StrictHostKeyChecking=no ${SSH_USER}@${TARGET_HOST} << EOF
-                            sudo mv /home/${FTP_USER}/ftp/${IMAGE_TAR} ${DEPLOY_DIR}/
+                            sudo su
+                            mv /home/${FTP_USER}/ftp/${IMAGE_TAR} ${DEPLOY_DIR}/
                             cd ${DEPLOY_DIR}
-                            sudo chmod 644 ${IMAGE_TAR}
+                            chmod 644 ${IMAGE_TAR}
                             docker load -i ${IMAGE_TAR}
                             docker compose down || true
                             docker compose up -d
