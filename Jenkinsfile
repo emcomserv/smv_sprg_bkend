@@ -43,11 +43,11 @@ pipeline {
                         docker save -o ${IMAGE_TAR} ${IMAGE_NAME}:${IMAGE_TAG}
 
                         # SCP the image tar to remote FTP user's home
-                        sshpass -p ${SSH_PASS} scp -o StrictHostKeyChecking=no ${IMAGE_TAR} ${SSH_USER}@${TARGET_HOST}:${DEPLOY_DIR}
+                        sshpass -p ${FTP_PASS} scp -o StrictHostKeyChecking=no ${IMAGE_TAR} ${FTP_USER}@${TARGET_HOST}:/home/${FTP_USER}/ftp
 
                         # SSH as root, move tar, load image, and use docker-compose
                         sshpass -p ${SSH_PASS} ssh -o StrictHostKeyChecking=no ${SSH_USER}@${TARGET_HOST} << EOF
-                            #mv /home/${FTP_USER}/ftp/${IMAGE_TAR} ${DEPLOY_DIR}/
+                            sudo mv /home/${FTP_USER}/ftp/${IMAGE_TAR} ${DEPLOY_DIR}/
                             cd ${DEPLOY_DIR}
                             docker load -i ${IMAGE_TAR}
                             docker compose down || true
