@@ -38,25 +38,24 @@ pipeline {
                     usernamePassword(credentialsId: 'ftp-creds', usernameVariable: 'FTP_USER', passwordVariable: 'FTP_PASS'),
                     usernamePassword(credentialsId: 'ssh-creds', usernameVariable: 'SSH_USER', passwordVariable: 'SSH_PASS')
                 ]) {
-                    sh '''
-                        # Save the Docker image
-                        docker save -o ${IMAGE_TAR} ${IMAGE_NAME}:${IMAGE_TAG}
+                     sh '''
+                            # Save the Docker image
+                                docker save -o ${IMAGE_TAR} ${IMAGE_NAME}:${IMAGE_TAG}
 
-                        # SCP the image tar to remote FTP user's home
-                        sshpass -p ${FTP_PASS} scp -o StrictHostKeyChecking=no ${IMAGE_TAR} ${FTP_USER}@${TARGET_HOST}:/home/${FTP_USER}/ftp
+                            # SCP the image tar to remote FTP user's home
+                                sshpass -p ${FTP_PASS} scp -o StrictHostKeyChecking=no ${IMAGE_TAR} ${FTP_USER}@${TARGET_HOST}:/home/${FTP_USER}/ftp
 
-                        # SSH as root, move tar, load image, and use docker-compose
-                        sshpass -p ${SSH_PASS} ssh -o StrictHostKeyChecking=no ${SSH_USER}@${TARGET_HOST} bash -c '"
-                            sudo su
-                            mv /home/${FTP_USER}/ftp/${IMAGE_TAR} ${DEPLOY_DIR}/
-                            cd ${DEPLOY_DIR}
-                            chmod 644 ${IMAGE_TAR}
-                            docker load -i ${IMAGE_TAR}
-                            docker compose down || true
-                            docker compose up -d
-                        '"
-                    '''
-                }
+                            # SSH, move tar, load image, and use docker-compose
+                                sshpass -p ${SSH_PASS} ssh -o StrictHostKeyChecking=no ${SSH_USER}@${TARGET_HOST} bash -c '
+                                sudo su
+                                mv /home/${FTP_USER}/ftp/${IMAGE_TAR} ${DEPLOY_DIR}/
+                                cd ${DEPLOY_DIR}
+                                chmod 644 ${IMAGE_TAR}
+                                docker load -i ${IMAGE_TAR}
+                                docker compose down || true
+                                docker compose up -d
+                            '
+                            '''
             }
         }
     }
