@@ -46,7 +46,7 @@ pipeline {
                         sshpass -p ${FTP_PASS} scp -o StrictHostKeyChecking=no ${IMAGE_TAR} ${FTP_USER}@${TARGET_HOST}:/home/${FTP_USER}/ftp
 
                         # SSH as root, move tar, load image, and use docker-compose
-                        sshpass -p ${SSH_PASS} ssh -o StrictHostKeyChecking=no ${SSH_USER}@${TARGET_HOST} '"
+                        sshpass -p ${SSH_PASS} ssh -o StrictHostKeyChecking=no ${SSH_USER}@${TARGET_HOST} bash -c '"
                             sudo su
                             mv /home/${FTP_USER}/ftp/${IMAGE_TAR} ${DEPLOY_DIR}/
                             cd ${DEPLOY_DIR}
