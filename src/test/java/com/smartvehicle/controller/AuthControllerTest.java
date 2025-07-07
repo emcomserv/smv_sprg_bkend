@@ -155,6 +155,7 @@ class AuthControllerTest {
             // Arrange
             ResetPasswordRequest resetPasswordRequest = new ResetPasswordRequest();
             resetPasswordRequest.setPassword("newPassword");
+            resetPasswordRequest.setUserName("ashok");
 
             Authentication authentication = mock(Authentication.class);
             when(authentication.getDetails()).thenReturn(Collections.singletonMap("userId", 1L));
@@ -163,11 +164,12 @@ class AuthControllerTest {
             user.setId(1L);
             user.setPassword("oldPassword");
 
+            when(userRepository.findByUsername("ashok")).thenReturn(Optional.of(user));
             when(userRepository.findById(1L)).thenReturn(Optional.of(user));
             when(passwordEncoder.encode("newPassword")).thenReturn("encodedNewPassword");
 
             // Act
-            ResponseEntity<?> response = authController.getStudents(authentication, resetPasswordRequest);
+            ResponseEntity<?> response = authController.resetPassword(resetPasswordRequest);
 
             // Assert
             assertEquals(HttpStatus.OK, response.getStatusCode());
@@ -190,7 +192,7 @@ class AuthControllerTest {
             when(authentication.getDetails()).thenReturn(null); // Simulate unauthorized user
 
             // Act & Assert
-            assertThrows(RuntimeException.class, () -> authController.getStudents(authentication, resetPasswordRequest));
+            assertThrows(RuntimeException.class, () -> authController.resetPassword(resetPasswordRequest));
         }
     }
 
@@ -209,7 +211,7 @@ class AuthControllerTest {
             when(userRepository.findById(1L)).thenReturn(Optional.empty());
 
             // Act & Assert
-            assertThrows(RuntimeException.class, () -> authController.getStudents(authentication, resetPasswordRequest));
+            assertThrows(RuntimeException.class, () -> authController.resetPassword(resetPasswordRequest));
         }
     }
 }

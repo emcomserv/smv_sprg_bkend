@@ -27,7 +27,7 @@ public class TwilioVerificationService {
     @PostConstruct
     public void init() {
         Twilio.init(accountSid, authToken);
-        log.info("Twilio initialized with Account SID: {}", accountSid);
+        log.info("Twilio initialized  with Account SID: {}", accountSid);
     }
 
     /**

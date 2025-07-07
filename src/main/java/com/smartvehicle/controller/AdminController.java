@@ -51,7 +51,7 @@ public class AdminController {
         if (adminRepository.findBySmAdminId(request.getSmAdminId()).isPresent()) {
             return ResponseEntity
                     .status(HttpStatus.CONFLICT)
-                    .body("sm_admin_id already exists! Please use a unique value.");
+                    .body("sm_admin_id already  exists! Please use a unique value.");
         }
 
         // Fetch School by ID
