@@ -149,4 +149,16 @@ public class AdminController {
 
         return ResponseEntity.ok("Admin details updated successfully for ID " + id);
     }
+
+    @PatchMapping("/user/2fa")
+    public ResponseEntity<?> updateUser2FA(@RequestParam String username, @RequestParam boolean enabled) {
+        Optional<User> userOpt = userRepository.findByUsername(username);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+        }
+        User user = userOpt.get();
+        user.setTwoFactorEnabled(enabled);
+        userRepository.save(user);
+        return ResponseEntity.ok("2FA updated for user: " + username + ", enabled: " + enabled);
+    }
 }
