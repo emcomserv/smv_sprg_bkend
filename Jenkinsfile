@@ -4,7 +4,7 @@ pipeline {
     environment {
         IMAGE_NAME = 'smart_vehicle'
         IMAGE_TAG = '1.0'
-        IMAGE_TAR = 'smart_vehicle.tar'
+        IMAGE_TAR = 'smart_vehicle-$(date +%Y%m%d-%H%M%S).tar'
         TARGET_HOST = '68.178.203.99'
         DEPLOY_DIR = '/home/appusr/application/smv_sprg_bkend'
     }
