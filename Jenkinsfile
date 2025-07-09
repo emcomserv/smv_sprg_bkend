@@ -41,6 +41,7 @@ pipeline {
                     sh """
                         # Save the Docker image
                         docker save -o ${IMAGE_TAR} ${IMAGE_NAME}:${IMAGE_TAG}
+                        docker system prune -f
 
                         # SCP the image tar to remote FTP user's home
                         sshpass -p ${FTP_PASS} scp -o StrictHostKeyChecking=no ${IMAGE_TAR} ${FTP_USER}@${TARGET_HOST}:/home/${FTP_USER}/ftp/builds
