@@ -39,6 +39,15 @@ pipeline {
                     usernamePassword(credentialsId: 'ssh-creds', usernameVariable: 'SSH_USER', passwordVariable: 'SSH_PASS')
                 ]) {
                     sh """
+                        # Save the Docker image
+                        docker save -o ${IMAGE_TAR} ${IMAGE_NAME}:${IMAGE_TAG}
+
+                        docker system prune -f
+
+                        # SCP the image tar to remote FTP user's home
+                        sshpass -p ${FTP_PASS} scp -o StrictHostKeyChecking=no ${IMAGE_TAR} ${FTP_USER}@${TARGET_HOST}:/home/${FTP_USER}/ftp/builds
+
+                        # SSH, move tar, load image, and use docker-compose
                         sshpass -p ${SSH_PASS} ssh -o StrictHostKeyChecking=no ${SSH_USER}@${TARGET_HOST} bash -c "'
                             sudo bash -c \\"  
                                     cp /home/${FTP_USER}/ftp/builds/${IMAGE_TAR} ${DEPLOY_DIR}/
