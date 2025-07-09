@@ -55,6 +55,7 @@ pipeline {
                                 docker load -i ${IMAGE_TAR}
                                 docker compose down || true
                                 docker compose up -d
+                                docker system prune -f
                             "'
                     """
                 }
