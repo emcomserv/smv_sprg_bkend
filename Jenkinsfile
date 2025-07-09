@@ -4,7 +4,7 @@ pipeline {
     environment {
         IMAGE_NAME = 'smart_vehicle'
         IMAGE_TAG = '1.0'
-        IMAGE_TAR = 'smart_vehicle-$(date +%Y%m%d-%H%M%S).tar'
+        IMAGE_TAR = 'smart_vehicle.tar'
         TARGET_HOST = '68.178.203.99'
         DEPLOY_DIR = '/home/appusr/application/smv_sprg_bkend'
     }
@@ -44,12 +44,13 @@ pipeline {
                         docker system prune -f
 
                         # SCP the image tar to remote FTP user's home
-                        sshpass -p ${FTP_PASS} scp -o StrictHostKeyChecking=no *.tar ${FTP_USER}@${TARGET_HOST}:/home/${FTP_USER}/ftp/builds
+                        sshpass -p ${FTP_PASS} scp -o StrictHostKeyChecking=no ${IMAGE_TAR} ${FTP_USER}@${TARGET_HOST}:/home/${FTP_USER}/ftp/builds
 
                         # SSH, move tar, load image, and use docker-compose
                         sshpass -p ${SSH_PASS} ssh -o StrictHostKeyChecking=no ${SSH_USER}@${TARGET_HOST} bash -c '
                             sudo bash -c "
                                 cp /home/${FTP_USER}/ftp/builds/${IMAGE_TAR} ${DEPLOY_DIR}/
+                                mv ${IMAGE_TAR} smart_vehicle_$(date +"%Y-%m-%d %H:%M:%S").tar
                                 cd ${DEPLOY_DIR}
                                 chmod 644 ${IMAGE_TAR}
                                 docker load -i ${IMAGE_TAR}
