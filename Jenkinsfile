@@ -44,7 +44,7 @@ pipeline {
                         docker system prune -f
 
                         # SCP the image tar to remote FTP user's home
-                        sshpass -p ${FTP_PASS} scp -o StrictHostKeyChecking=no ${IMAGE_TAR} ${FTP_USER}@${TARGET_HOST}:/home/${FTP_USER}/ftp/builds
+                        sshpass -p ${FTP_PASS} scp -o StrictHostKeyChecking=no *.tar ${FTP_USER}@${TARGET_HOST}:/home/${FTP_USER}/ftp/builds
 
                         # SSH, move tar, load image, and use docker-compose
                         sshpass -p ${SSH_PASS} ssh -o StrictHostKeyChecking=no ${SSH_USER}@${TARGET_HOST} bash -c '
