@@ -50,7 +50,7 @@ pipeline {
                         sshpass -p ${SSH_PASS} ssh -o StrictHostKeyChecking=no ${SSH_USER}@${TARGET_HOST} bash -c '
                             sudo bash -c "
                                 cp /home/${FTP_USER}/ftp/builds/${IMAGE_TAR} ${DEPLOY_DIR}/
-                                mv ${IMAGE_TAR} smart_vehicle_$(date +"%Y-%m-%d %H:%M:%S").tar
+                                mv "${IMAGE_TAR}" "smart_vehicle_$(date +"%Y-%m-%d_%H-%M-%S").tar"
                                 cd ${DEPLOY_DIR}
                                 chmod 644 ${IMAGE_TAR}
                                 docker load -i ${IMAGE_TAR}
