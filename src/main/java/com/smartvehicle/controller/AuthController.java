@@ -69,20 +69,30 @@ public class AuthController {
     @Transactional
     public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
         User user = userRepository.findByUsername(loginRequest.getUserName())
-                .orElseThrow(() -> new RuntimeException("User not  found"));
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
+        // 1. Authenticate username/password
         Authentication authentication = authenticationManager
                 .authenticate(new UsernamePasswordAuthenticationToken(loginRequest.getUserName(), loginRequest.getPassword()));
+
+        // 2. If 2FA is enabled, trigger OTP and return OTP_REQUIRED (do NOT return JWT)
+        if (Boolean.TRUE.equals(user.getTwoFactorEnabled())) {
+            String status = twilioVerificationService.startVerification(user.getPhone());
+            if ("failed".equals(status)) {
+                throw new RuntimeException("Failed verification service");
+            }
+            // Return a special response indicating OTP is required
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(java.util.Map.of(
+                            "message", "OTP_REQUIRED",
+                            "username", user.getUsername()
+                    ));
+        }
+
+        // 3. If 2FA is not enabled, proceed as normal
         SecurityContextHolder.getContext().setAuthentication(authentication);
         UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
         String jwt = jwtUtils.generateJwtToken(authentication);
-
-        if (user.getTwoFactorEnabled()) {
-            String status = twilioVerificationService.startVerification(userDetails.getPhone());
-            if (status.equals("failed")) {
-                throw new RuntimeException("Failed verification service");
-            }
-        }
 
         try {
             if (StringUtils.hasText(CustomRequestContextHolder.getDeviceType())
