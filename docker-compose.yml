@@ -1,0 +1,17 @@
+services:
+  smartvehicle-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    ports:
+       - "7082:7082"
+
+    volumes:
+      - ./logs:/app/logs
+      - /home/appusr/application/test/src/main/resources/application.properties:/app/classes/application.properties
+
+    environment:
+      - SPRING_CONFIG_LOCATION=file:/app/classes/application.properties
+
+    restart: unless-stopped
