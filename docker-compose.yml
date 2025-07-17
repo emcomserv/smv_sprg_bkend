@@ -1,11 +1,8 @@
 services:
   smartvehicle-app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: smart_vehicle:1.0
 
-    ports:
-       - "7080:7080"
+    network_mode: host
 
     volumes:
       - ./logs:/app/logs
