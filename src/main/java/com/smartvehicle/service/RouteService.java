@@ -55,6 +55,7 @@ public class RouteService {
         route.setContent(request.getContent());
         route.setSchool(school);
         route.setCityCode(request.getCityCode());
+        route.setDeviceId(request.getDeviceId());
         routeRepository.save(route);
         return new RouteRegResDTO(route.getId(), route.getRouteName(), route.getTitle(), route.getStatus(), school.getName());
     }

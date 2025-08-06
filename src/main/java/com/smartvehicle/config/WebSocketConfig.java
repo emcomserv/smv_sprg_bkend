@@ -20,5 +20,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws/student-validation")
                 .setAllowedOriginPatterns("*");
+        // Add this line for GPS WebSocket
+        registry.addEndpoint("/ws/gps")
+                .setAllowedOriginPatterns("*");
     }
 }

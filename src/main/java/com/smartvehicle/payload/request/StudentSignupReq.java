@@ -18,4 +18,5 @@ public class StudentSignupReq {
     private String firstName;
     private String lastName;
     private String schoolId;
+    private String deviceId;
 }

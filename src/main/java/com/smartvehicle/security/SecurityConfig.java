@@ -6,6 +6,7 @@ import com.twilio.base.ResourceSet;
 import com.twilio.rest.verify.v2.Service;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -129,9 +130,12 @@ public class SecurityConfig  {
         source.registerCorsConfiguration("/**", configuration);
         return source;
     }
+    // Uncomment this bean when you have valid Twilio credentials
+    /*
     @Bean
+    @ConditionalOnProperty(name = "twilio.enabled", havingValue = "true", matchIfMissing = false)
     public Service twilioService() {
-
+        try {
         Twilio.init(accountSid, authToken);
         ResourceSet<Service> services = Service.reader().read();
         for (Service service : services) {
@@ -145,6 +149,11 @@ public class SecurityConfig  {
         String serviceSid = newService.getSid();
         System.out.println("Service created: " + serviceName + " with SID: " + serviceSid);
         return Service.fetcher(serviceSid).fetch();
+        } catch (Exception e) {
+            System.err.println("Twilio service initialization failed: " + e.getMessage());
+            throw new RuntimeException("Twilio service initialization failed", e);
+        }
     }
+    */
 
 }

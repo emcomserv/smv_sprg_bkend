@@ -41,4 +41,8 @@ public interface RouteRepository extends JpaRepository<Route,Long> {
                     "status = ?4, reserve = ?5, content = ?6, city_code = ?7 where sm_route_id = ?8",
             nativeQuery = true)
     void updateRoute(String schId, String routeName, String title, boolean status, int reserve, String content, String cityCode, String smRouteId);
+
+    Route findFirstByAssignedFalseOrAssignedIsNull();
+    Route findByDeviceIdAndAssignedTrue(String deviceId);
+    Route findFirstBySchool_IdAndAssignedFalseOrAssignedIsNull(String schoolId);
 }

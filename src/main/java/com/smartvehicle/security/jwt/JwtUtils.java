@@ -42,6 +42,16 @@ public class JwtUtils {
             .compact();
   }
 
+  public String generateJwtTokenForDevice(String deviceId, Map<String, Object> claims) {
+    return Jwts.builder()
+            .setClaims(claims)
+            .setSubject(deviceId)
+            .setIssuedAt(new Date())
+            .setExpiration(new Date((new Date()).getTime() + jwtExpirationMs))
+            .signWith(key(), SignatureAlgorithm.HS256)
+            .compact();
+  }
+
   private Key key() {
     return Keys.hmacShaKeyFor(Decoders.BASE64.decode(jwtSecret));
   }

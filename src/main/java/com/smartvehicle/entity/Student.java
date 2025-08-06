@@ -56,4 +56,6 @@ public class Student extends BaseEntity{
     @JoinColumn(name = "route_point_id")
     private RoutePoint routePoint;
 
+    @Column(name = "device_id", length = 100)
+    private String deviceId;
 }

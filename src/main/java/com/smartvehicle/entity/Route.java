@@ -40,6 +40,13 @@ public class Route extends BaseEntity{
 
     @Column(name = "city_code",length = 255)
     private  String cityCode;
+    
+    @Column(name = "device_id", length = 100)
+    private String deviceId;
+    
+    @Column(name = "assigned", columnDefinition = "TINYINT(1) DEFAULT 0")
+    private Boolean assigned = false;
+    
     @OneToMany(mappedBy = "route",fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private List<RoutePoint> routePoints;
     @ManyToOne

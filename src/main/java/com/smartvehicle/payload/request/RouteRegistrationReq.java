@@ -27,4 +27,6 @@ public class RouteRegistrationReq {
     private String schoolId;
 
     private String cityCode;
+    
+    private String deviceId;
 }
