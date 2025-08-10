@@ -52,6 +52,12 @@ public class DeviceAuthTcpServerService {
     private DeviceRepository deviceRepository;
 
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
+    
+    // State management for student list sending
+    private final Map<String, StudentListState> deviceStates = new HashMap<>();
+    
+    // State management by school and route combination
+    private final Map<String, StudentListState> schoolRouteStates = new HashMap<>();
 
     @PostConstruct
     public void startServer() {
@@ -122,6 +128,8 @@ public class DeviceAuthTcpServerService {
             e.printStackTrace();
         } finally {
             try {
+                // Clean up device states for this connection
+                cleanupDeviceStatesForConnection(socket);
                 socket.close();
             } catch (IOException e) {
                 System.err.println("❌ Error closing socket: " + e.getMessage());
@@ -129,13 +137,26 @@ public class DeviceAuthTcpServerService {
         }
     }
 
+    private void cleanupDeviceStatesForConnection(Socket socket) {
+        // This is a simplified cleanup - in a real implementation, you might want to
+        // track which devices are associated with which connections
+        System.out.println("🧹 Cleaning up device states for disconnected connection: " + socket.getInetAddress());
+        // For now, we'll keep the device states as they might be needed for reconnections
+        // You might want to implement a more sophisticated cleanup mechanism
+        // Note: We're now using schoolRouteStates instead of deviceStates
+    }
+
     private String extractCompleteMessage(String data) {
+        System.out.println("🔍 extractCompleteMessage called with data: '" + data + "'");
+        
         // Look for complete messages that end with expected suffixes
         if (data.contains("AUTHAAAA")) {
             int start = data.indexOf("1000");
             int end = data.indexOf("AUTHAAAA") + "AUTHAAAA".length();
             if (start != -1 && end > start) {
-                return data.substring(start, end);
+                String message = data.substring(start, end);
+                System.out.println("🔍 Found AUTH message: '" + message + "'");
+                return message;
             }
         }
 
@@ -143,7 +164,19 @@ public class DeviceAuthTcpServerService {
             int start = data.indexOf("1002");
             int end = data.indexOf("StudentListAAAA") + "StudentListAAAA".length();
             if (start != -1 && end > start) {
-                return data.substring(start, end);
+                String message = data.substring(start, end);
+                System.out.println("🔍 Found StudentList message: '" + message + "'");
+                return message;
+            }
+        }
+
+        if (data.contains("ACKAAAA")) {
+            int start = data.indexOf("1002");
+            int end = data.indexOf("ACKAAAA") + "ACKAAAA".length();
+            if (start != -1 && end > start) {
+                String message = data.substring(start, end);
+                System.out.println("🔍 Found ACK message: '" + message + "'");
+                return message;
             }
         }
 
@@ -154,11 +187,14 @@ public class DeviceAuthTcpServerService {
                 int end = data.indexOf("AAAA", start);
                 if (end != -1 && end > start) {
                     end += "AAAA".length();
-                    return data.substring(start, end);
+                    String message = data.substring(start, end);
+                    System.out.println("🔍 Found swipe card message: '" + message + "'");
+                    return message;
                 }
             }
         }
 
+        System.out.println("🔍 No complete message found in data");
         return null; // No complete message found
     }
 
@@ -193,8 +229,12 @@ public class DeviceAuthTcpServerService {
             } else {
                 System.out.println("⚠️ No response generated for swipe card request: " + message);
             }
+        } else if (isAcknowledgmentMessage(message)) {
+            System.out.println("🔍 Processing acknowledgment message: " + message);
+            processAcknowledgmentMessage(message, out);
         } else {
             System.err.println("❌ Invalid request format received: " + message);
+            System.err.println("❌ Message does not match any expected format");
         }
     }
 
@@ -214,6 +254,100 @@ public class DeviceAuthTcpServerService {
         return request != null &&
                 request.startsWith(SWIPE_CARD_PREFIX) &&
                 request.endsWith(SWIPE_CARD_SUFFIX);
+    }
+
+    private boolean isAcknowledgmentMessage(String message) {
+        boolean isAck = message != null && message.endsWith("ACKAAAA");
+        System.out.println("🔍 Checking if message is acknowledgment: '" + message + "' -> " + isAck);
+        return isAck;
+    }
+
+    private void processAcknowledgmentMessage(String message, PrintWriter out) {
+        try {
+            System.out.println("🔍 Parsing acknowledgment message: " + message);
+            
+            // Extract school ID, route ID, and student ID from acknowledgment format: 1002AC1F0002RT7F0001ST6F0001ACKAAAA
+            String schoolId = extractSchoolIdFromAcknowledgment(message);
+            String routeId = extractRouteIdFromAcknowledgment(message);
+            String studentId = extractStudentIdFromAcknowledgment(message);
+            
+            System.out.println("✅ Received acknowledgment for - School ID: '" + schoolId + 
+                    "', Route ID: '" + routeId + 
+                    "', Student ID: '" + studentId + "'");
+
+            if (schoolId == null || routeId == null || studentId == null) {
+                System.err.println("❌ Failed to parse acknowledgment message: " + message);
+                return;
+            }
+
+            System.out.println("🚀 About to process next student for school: " + schoolId + " and route: " + routeId);
+            
+            // Find the device that sent this student and process the next student
+            processNextStudentForSchoolRoute(schoolId, routeId, studentId, out);
+            
+        } catch (Exception e) {
+            System.err.println("❌ Error processing acknowledgment message: " + message + " - " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    private String extractSchoolIdFromAcknowledgment(String message) {
+        try {
+            // Remove prefix (1002) and find school ID pattern
+            // Acknowledgment format: 1002AC1F0002RT7F0001ST6F0001ACKAAAA
+            String content = message.substring(4); // Remove "1002"
+            
+            System.out.println("🔍 Acknowledgment content after removing prefix: '" + content + "'");
+            System.out.println("🔍 Acknowledgment content length: " + content.length());
+            
+            // School ID is first 8 characters after 1002
+            if (content.length() >= 8) {
+                String schoolId = content.substring(0, 8);
+                System.out.println("🔍 Extracted school ID from acknowledgment: '" + schoolId + "'");
+                return schoolId;
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Error extracting school ID from acknowledgment: " + e.getMessage());
+        }
+        return null;
+    }
+
+    private String extractRouteIdFromAcknowledgment(String message) {
+        try {
+            // Remove prefix (1002) and find route ID pattern
+            // Acknowledgment format: 1002AC1F0002RT7F0001ST6F0001ACKAAAA
+            String content = message.substring(4); // Remove "1002"
+            
+            // School ID is 8 characters, so Route ID starts at position 8
+            if (content.length() >= 16) {
+                // Route ID is 8 characters (positions 8-16)
+                String routeId = content.substring(8, 16);
+                System.out.println("🔍 Extracted route ID from acknowledgment: '" + routeId + "'");
+                return routeId;
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Error extracting route ID from acknowledgment: " + e.getMessage());
+        }
+        return null;
+    }
+
+    private String extractStudentIdFromAcknowledgment(String message) {
+        try {
+            // Remove prefix (1002) and find student ID pattern
+            // Acknowledgment format: 1002AC1F0002RT7F0001ST6F0001ACKAAAA
+            String content = message.substring(4); // Remove "1002"
+            
+            // School ID is 8 characters, Route ID is 8 characters, so Student ID starts at position 16
+            if (content.length() >= 24) {
+                // Student ID is 8 characters (positions 16-24)
+                String studentId = content.substring(16, 24);
+                System.out.println("🔍 Extracted student ID from acknowledgment: '" + studentId + "'");
+                return studentId;
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Error extracting student ID from acknowledgment: " + e.getMessage());
+        }
+        return null;
     }
 
     private void processStudentListRequest(String request, PrintWriter out) {
@@ -260,38 +394,60 @@ public class DeviceAuthTcpServerService {
                 }
             }
 
-            // Send students one by one with 1-second delay
-            for (int i = 0; i < students.size(); i++) {
-                Student student = students.get(i);
-                String studentResponse = "1002" + deviceId + schoolId + routeId + student.getSmStudentId() + "AAAA";
-
-                // Schedule the response with delay
-                final int index = i;
-                scheduler.schedule(() -> {
-                    try {
-                        out.println(studentResponse);
-                        System.out.println("📤 Sent student " + (index + 1) + "/" + students.size() + ": " + studentResponse);
-                    } catch (Exception e) {
-                        System.err.println("❌ Error sending student response: " + e.getMessage());
-                    }
-                }, i + 1, TimeUnit.SECONDS);
-            }
-
-            // Send END marker after all students
-            String endResponse = "1002" + deviceId + schoolId + routeId + "ENDAAAA";
-            scheduler.schedule(() -> {
-                try {
-                    out.println(endResponse);
-                    System.out.println("📤 Sent END marker: " + endResponse);
-                } catch (Exception e) {
-                    System.err.println("❌ Error sending END marker: " + e.getMessage());
-                }
-            }, students.size() + 1, TimeUnit.SECONDS);
+            // Start the acknowledgment-based student sending process
+            startAcknowledgmentBasedStudentSending(deviceId, schoolId, routeId, students, out);
 
         } catch (Exception e) {
             System.err.println("❌ Error processing student list request: " + request + " - " + e.getMessage());
             e.printStackTrace();
         }
+    }
+
+    private void startAcknowledgmentBasedStudentSending(String deviceId, String schoolId, String routeId, 
+                                                      List<Student> students, PrintWriter out) {
+        if (students.isEmpty()) {
+            // Send END marker immediately if no students
+            String endResponse = "1002" + deviceId + schoolId + routeId + "ENDAAAA";
+            out.println(endResponse);
+            System.out.println("📤 Sent END marker (no students): " + endResponse);
+            return;
+        }
+
+        // Initialize state for this school and route combination
+        String schoolRouteKey = schoolId + "_" + routeId;
+        System.out.println("🔑 Creating state with key: '" + schoolRouteKey + "' for device: " + deviceId);
+        
+        StudentListState state = new StudentListState(students, deviceId);
+        schoolRouteStates.put(schoolRouteKey, state);
+        
+        System.out.println("🚀 Starting acknowledgment-based student sending for device " + deviceId + 
+                " with " + students.size() + " students");
+        System.out.println("🔑 State stored with key: '" + schoolRouteKey + "'");
+        System.out.println("🔑 Total states in map after storing: " + schoolRouteStates.size());
+        System.out.println("🔑 Available keys after storing: " + schoolRouteStates.keySet());
+
+        // Send first student immediately
+        sendNextStudentForSchoolRoute(schoolId, routeId, students, state, out);
+        
+        // Schedule a timeout to clean up if no acknowledgment is received
+        scheduleTimeoutForSchoolRoute(schoolId, routeId, students.size());
+    }
+
+    private void scheduleTimeoutForSchoolRoute(String schoolId, String routeId, int studentCount) {
+        // Set a timeout based on the number of students (30 seconds per student + 10 seconds buffer)
+        int timeoutSeconds = (studentCount * 30) + 10;
+        
+        scheduler.schedule(() -> {
+            String schoolRouteKey = schoolId + "_" + routeId;
+            StudentListState state = schoolRouteStates.get(schoolRouteKey);
+            if (state != null) {
+                System.err.println("⏰ Timeout reached for school: " + schoolId + " and route: " + routeId + " - cleaning up state");
+                schoolRouteStates.remove(schoolRouteKey);
+            }
+        }, timeoutSeconds, TimeUnit.SECONDS);
+        
+        System.out.println("⏰ Scheduled timeout for school: " + schoolId + " and route: " + routeId + 
+                " in " + timeoutSeconds + " seconds");
     }
 
     private String extractDeviceIdFromStudentListRequest(String request) {
@@ -300,9 +456,14 @@ public class DeviceAuthTcpServerService {
             String content = request.substring(STUDENT_LIST_PREFIX.length(),
                     request.length() - STUDENT_LIST_SUFFIX.length());
 
+            System.out.println("🔍 Raw content after removing prefix and suffix: '" + content + "'");
+            System.out.println("🔍 Content length: " + content.length());
+
             // Extract device ID (first 10 characters after 1002)
             if (content.length() >= 10) {
-                return content.substring(0, 10);
+                String deviceId = content.substring(0, 10);
+                System.out.println("🔍 Extracted device ID: '" + deviceId + "'");
+                return deviceId;
             }
         } catch (Exception e) {
             System.err.println("❌ Error extracting device ID from student list request: " + e.getMessage());
@@ -316,13 +477,12 @@ public class DeviceAuthTcpServerService {
             String content = request.substring(STUDENT_LIST_PREFIX.length(),
                     request.length() - STUDENT_LIST_SUFFIX.length());
 
-            // Check if this is new format (28 characters total) or old format (24 characters total)
-            if (content.length() >= 28) {
-                // New format: school ID is 8 characters (positions 10-18)
-                return content.substring(10, 18);
-            } else if (content.length() >= 24) {
-                // Old format: school ID is 7 characters (positions 10-17)
-                return content.substring(10, 17);
+            // Device ID is 10 characters, so school ID starts at position 10
+            if (content.length() >= 18) {
+                // School ID is 8 characters (positions 10-18)
+                String schoolId = content.substring(10, 18);
+                System.out.println("🔍 Extracted school ID: '" + schoolId + "'");
+                return schoolId;
             }
         } catch (Exception e) {
             System.err.println("❌ Error extracting school ID from student list request: " + e.getMessage());
@@ -336,13 +496,12 @@ public class DeviceAuthTcpServerService {
             String content = request.substring(STUDENT_LIST_PREFIX.length(),
                     request.length() - STUDENT_LIST_SUFFIX.length());
 
-            // Check if this is new format (28 characters total) or old format (24 characters total)
-            if (content.length() >= 28) {
-                // New format: route ID is 8 characters (positions 18-26)
-                return content.substring(18, 26);
-            } else if (content.length() >= 24) {
-                // Old format: route ID is 7 characters (positions 17-24)
-                return content.substring(17, 24);
+            // Device ID is 10 characters, School ID is 8 characters, so Route ID starts at position 18
+            if (content.length() >= 26) {
+                // Route ID is 8 characters (positions 18-26)
+                String routeId = content.substring(18, 26);
+                System.out.println("🔍 Extracted route ID: '" + routeId + "'");
+                return routeId;
             }
         } catch (Exception e) {
             System.err.println("❌ Error extracting route ID from student list request: " + e.getMessage());
@@ -356,12 +515,8 @@ public class DeviceAuthTcpServerService {
             String content = request.substring(STUDENT_LIST_PREFIX.length(),
                     request.length() - STUDENT_LIST_SUFFIX.length());
 
-            // Check if this is new format (28 characters total)
-            if (content.length() >= 28) {
-                // New format: count is 2 characters (positions 26-28)
-                return content.substring(26, 28);
-            }
-            // Old format: no count field
+            // For the current format, we're ignoring count
+            // If you need count in the future, it would be after the route ID
             return null;
         } catch (Exception e) {
             System.err.println("❌ Error extracting count from student list request: " + e.getMessage());
@@ -619,17 +774,17 @@ public class DeviceAuthTcpServerService {
     }
 
     private String buildFtpPathFromSwipe(SwipeStudentDevice swipe) {
-        if (swipe == null || swipe.getSchoolId() == null || swipe.getImageName() == null) {
+        if (swipe == null || swipe.getSchoolId() == null || swipe.getRouteId() == null || swipe.getImageName() == null) {
             return null;
         }
-        // Format: /upload/{schoolId}/{imageName}
-        return "/upload/" + swipe.getSchoolId() + "/" + swipe.getImageName();
+        // Format: /upload/{schoolId}/{routeId}/{imageName}
+        return "/upload/" + swipe.getSchoolId() + "/" + swipe.getRouteId() + "/" + swipe.getImageName();
     }
 
     private String sendFtpPathToPythonServer(String ftpPath, String studentId, String schoolId, String routeId) {
         try {
             // Connect to Python server (adjust IP and port as needed)
-            try (Socket pythonSocket = new Socket("68.178.203.99", 5005);
+            try (Socket pythonSocket = new Socket("68.178.203.99", 5004);
                  PrintWriter out = new PrintWriter(pythonSocket.getOutputStream(), true);
                  BufferedReader in = new BufferedReader(new InputStreamReader(pythonSocket.getInputStream()))) {
 
@@ -704,5 +859,106 @@ public class DeviceAuthTcpServerService {
         public String getRouteId() {
             return routeId;
         }
+    }
+    
+    // Helper class to track student list sending state for each device
+    private static class StudentListState {
+        private int currentIndex;
+        private final List<Student> students;
+        private final String deviceId;
+        
+        public StudentListState(List<Student> students, String deviceId) {
+            this.students = students;
+            this.deviceId = deviceId;
+            this.currentIndex = 0;
+        }
+        
+        public int getCurrentIndex() {
+            return currentIndex;
+        }
+        
+        public List<Student> getStudents() {
+            return students;
+        }
+        
+        public String getDeviceId() {
+            return deviceId;
+        }
+    }
+
+    private void processNextStudentForSchoolRoute(String schoolId, String routeId, String studentId, PrintWriter out) {
+        try {
+            // Create a key for school and route combination
+            String schoolRouteKey = schoolId + "_" + routeId;
+            
+            System.out.println("🔍 Looking for state with key: '" + schoolRouteKey + "'");
+            System.out.println("🔍 Available school-route keys: " + schoolRouteStates.keySet());
+            System.out.println("🔍 Total states in map: " + schoolRouteStates.size());
+            
+            // Debug: Print each key-value pair
+            for (Map.Entry<String, StudentListState> entry : schoolRouteStates.entrySet()) {
+                System.out.println("🔍 State entry - Key: '" + entry.getKey() + "', Device: " + entry.getValue().getDeviceId() + 
+                        ", Index: " + entry.getValue().getCurrentIndex() + ", Students: " + entry.getValue().getStudents().size());
+            }
+            
+            // Get the current state for this school and route
+            StudentListState state = schoolRouteStates.get(schoolRouteKey);
+            if (state == null) {
+                System.err.println("❌ No state found for school: " + schoolId + " and route: " + routeId);
+                System.err.println("❌ This means the acknowledgment was received but no student list request was processed first");
+                return;
+            }
+            
+            System.out.println("✅ Processing acknowledgment for student: " + studentId + 
+                    " in school: " + schoolId + " and route: " + routeId);
+            System.out.println("✅ Current state - Index: " + state.currentIndex + ", Total students: " + state.students.size());
+            
+            // Find the route by sm_route_id
+            Optional<Route> routeOpt = routeRepository.findBySmRouteId(routeId);
+            if (routeOpt.isEmpty()) {
+                System.err.println("❌ Route not found for acknowledgment: " + routeId);
+                return;
+            }
+
+            Route route = routeOpt.get();
+            List<Student> students = studentRepository.findAllByRoute_Id(route.getId());
+            
+            // Send the next student
+            sendNextStudentForSchoolRoute(schoolId, routeId, students, state, out);
+            
+        } catch (Exception e) {
+            System.err.println("❌ Error processing next student for school route: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    private void sendNextStudentForSchoolRoute(String schoolId, String routeId, 
+                                             List<Student> students, StudentListState state, PrintWriter out) {
+        if (state.currentIndex >= students.size()) {
+            // All students sent, send END marker
+            String endResponse = "1002" + state.getDeviceId() + schoolId + routeId + "ENDAAAA";
+            out.println(endResponse);
+            System.out.println("📤 Sent END marker: " + endResponse);
+            
+            // Clean up the state
+            String schoolRouteKey = schoolId + "_" + routeId;
+            schoolRouteStates.remove(schoolRouteKey);
+            System.out.println("✅ Completed student list sending for school: " + schoolId + 
+                    " and route: " + routeId + " - cleaned up state");
+            return;
+        }
+
+        Student student = students.get(state.currentIndex);
+        String studentResponse = "1002" + state.getDeviceId() + schoolId + routeId + student.getSmStudentId() + "AAAA";
+        
+        out.println(studentResponse);
+        System.out.println("📤 Sent student " + (state.currentIndex + 1) + "/" + students.size() + 
+                " for school: " + schoolId + " and route: " + routeId + ": " + studentResponse);
+        
+        // Increment the index for next acknowledgment
+        state.currentIndex++;
+        
+        System.out.println("⏳ Waiting for acknowledgment for next student: " + 
+                (state.currentIndex + 1) + "/" + students.size());
     }
 }
