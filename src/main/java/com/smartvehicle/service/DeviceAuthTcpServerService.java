@@ -1,9 +1,13 @@
 package com.smartvehicle.service;
 
+import com.smartvehicle.entity.Device;
 import com.smartvehicle.entity.Route;
 import com.smartvehicle.entity.Student;
+import com.smartvehicle.entity.SwipeStudentDevice;
+import com.smartvehicle.repository.DeviceRepository;
 import com.smartvehicle.repository.RouteRepository;
 import com.smartvehicle.repository.StudentRepository;
+import com.smartvehicle.repository.SwipeStudentDeviceRepository;
 import com.smartvehicle.security.jwt.JwtUtils;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,25 +20,25 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import com.smartvehicle.entity.SwipeStudentDevice;
-import com.smartvehicle.repository.SwipeStudentDeviceRepository;
 import java.util.Optional;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Service
 public class DeviceAuthTcpServerService {
-    private static final int PORT = 5000;
+    private static final int PORT = 8083;
 
-    // Constants for authentication and assignment requests
-    private static final String REQUEST_PREFIX = "#SMV";
-    private static final String REQUEST_SUFFIX = "_AAAA";
-    private static final String AUTH_REQUEST_PATTERN = "_1000_AUTH";
-    private static final String AUTH_RESPONSE_PATTERN = "_1000_JWT:";
-    private static final String ASSIGN_REQUEST_PATTERN = "_1001_";
-
-    private static final String STUDENT_VALIDATION_PREFIX = "#SMVSTD_";
-    private static final String STUDENT_VALIDATION_SUFFIX = "AAAA";
-    private static final String STUDENT_VALIDATION_SUCCESS = "<00>";
-    private static final String STUDENT_VALIDATION_FAILURE = "<01>";
+    // Constants for new auth format
+    private static final String AUTH_REQUEST_PREFIX = "1000";
+    private static final String AUTH_REQUEST_SUFFIX = "AUTHAAAA";
+    private static final String STUDENT_COUNT_PREFIX = "1001";
+    private static final String STUDENT_COUNT_SUFFIX = "AAAA";
+    private static final String STUDENT_LIST_PREFIX = "1002";
+    private static final String STUDENT_LIST_SUFFIX = "StudentListAAAA";
+    private static final String SWIPE_CARD_PREFIX = "1004";
+    private static final String SWIPE_CARD_SUFFIX = "AAAA";
 
     @Autowired
     private JwtUtils jwtUtils;
@@ -44,6 +48,10 @@ public class DeviceAuthTcpServerService {
     private StudentRepository studentRepository;
     @Autowired
     private SwipeStudentDeviceRepository swipeStudentDeviceRepository;
+    @Autowired
+    private DeviceRepository deviceRepository;
+
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
 
     @PostConstruct
     public void startServer() {
@@ -67,50 +75,46 @@ public class DeviceAuthTcpServerService {
     }
 
     private void handleClient(Socket socket) {
-        try (BufferedReader in = new BufferedReader(
-                new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
-             PrintWriter out = new PrintWriter(socket.getOutputStream(), true)) {
+        try (InputStream inputStream = socket.getInputStream();
+             OutputStream outputStream = socket.getOutputStream();
+             PrintWriter out = new PrintWriter(outputStream, true)) {
 
-            String line;
-            while ((line = in.readLine()) != null) {
-                System.out.println("📥 Auth received raw data: '" + line + "'");
+            byte[] buffer = new byte[1024];
+            StringBuilder dataBuffer = new StringBuilder();
 
-                // Student validation logic
-                if (isStudentValidationRequest(line)) {
-                    System.out.println("🔍 Processing student validation request: " + line);
-                    String response = processStudentValidationRequest(line);
-                    if (response != null) {
-                        out.println(response);
-                        System.out.println("📤 Sent student validation response: " + response);
-                    } else {
-                        System.out.println("⚠️ No response generated for student validation request: " + line);
-                    }
-                    continue;
+            while (true) {
+                int bytesRead = inputStream.read(buffer);
+                if (bytesRead == -1) {
+                    // Client disconnected
+                    System.out.println("🔌 Client disconnected");
+                    break;
                 }
 
-                if (isAssignRequest(line)) {
-                    System.out.println("🔍 Processing assign request: " + line);
-                    String response = processAssignRequest(line);
-                    if (response != null) {
-                        out.println(response);
-                        System.out.println("📤 Sent assign response: " + response);
-                    } else {
-                        System.out.println("⚠️ No response generated for assign request: " + line);
-                    }
-                    continue;
-                }
+                // Convert bytes to string
+                String receivedData = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
+                dataBuffer.append(receivedData);
 
-                if (isAuthRequest(line)) {
-                    System.out.println("🔍 Processing auth request: " + line);
-                    String response = processAuthRequest(line);
-                    if (response != null) {
-                        out.println(response);
-                        System.out.println("📤 Sent auth response: " + response);
-                    } else {
-                        System.out.println("⚠️ No response generated for auth request: " + line);
+                System.out.println("📥 Raw data received: '" + receivedData + "'");
+
+                // Process the complete buffer
+                String completeData = dataBuffer.toString();
+
+                // Look for complete messages
+                while (true) {
+                    String message = extractCompleteMessage(completeData);
+                    if (message == null) {
+                        // No complete message found, keep remaining data in buffer
+                        break;
                     }
-                } else {
-                    System.err.println("❌ Invalid auth format received: " + line);
+
+                    // Process the complete message
+                    processMessage(message, out);
+
+                    // Remove the processed message from buffer
+                    int messageEnd = completeData.indexOf(message) + message.length();
+                    completeData = completeData.substring(messageEnd);
+                    dataBuffer.setLength(0);
+                    dataBuffer.append(completeData);
                 }
             }
         } catch (IOException e) {
@@ -125,200 +129,261 @@ public class DeviceAuthTcpServerService {
         }
     }
 
+    private String extractCompleteMessage(String data) {
+        // Look for complete messages that end with expected suffixes
+        if (data.contains("AUTHAAAA")) {
+            int start = data.indexOf("1000");
+            int end = data.indexOf("AUTHAAAA") + "AUTHAAAA".length();
+            if (start != -1 && end > start) {
+                return data.substring(start, end);
+            }
+        }
+
+        if (data.contains("StudentListAAAA")) {
+            int start = data.indexOf("1002");
+            int end = data.indexOf("StudentListAAAA") + "StudentListAAAA".length();
+            if (start != -1 && end > start) {
+                return data.substring(start, end);
+            }
+        }
+
+        if (data.contains("AAAA")) {
+            // Check for swipe card requests (1004...AAAA)
+            int start = data.indexOf("1004");
+            if (start != -1) {
+                int end = data.indexOf("AAAA", start);
+                if (end != -1 && end > start) {
+                    end += "AAAA".length();
+                    return data.substring(start, end);
+                }
+            }
+        }
+
+        return null; // No complete message found
+    }
+
+    private boolean isCompleteMessage(String message) {
+        // Check if message ends with expected suffixes
+        return message.endsWith("AUTHAAAA") ||
+                message.endsWith("StudentListAAAA") ||
+                message.endsWith("AAAA");
+    }
+
+    private void processMessage(String message, PrintWriter out) {
+        System.out.println("🔍 Processing message: '" + message + "'");
+
+        if (isAuthRequest(message)) {
+            System.out.println("🔍 Processing auth request: " + message);
+            String response = processAuthRequest(message, out);
+            if (response != null) {
+                out.println(response);
+                System.out.println("📤 Sent auth response: " + response);
+            } else {
+                System.out.println("⚠️ No response generated for auth request: " + message);
+            }
+        } else if (isStudentListRequest(message)) {
+            System.out.println("🔍 Processing student list request: " + message);
+            processStudentListRequest(message, out);
+        } else if (isSwipeCardRequest(message)) {
+            System.out.println("🔍 Processing swipe card request: " + message);
+            String response = processSwipeCardRequest(message);
+            if (response != null) {
+                out.println(response);
+                System.out.println("📤 Sent swipe card response: " + response);
+            } else {
+                System.out.println("⚠️ No response generated for swipe card request: " + message);
+            }
+        } else {
+            System.err.println("❌ Invalid request format received: " + message);
+        }
+    }
+
     private boolean isAuthRequest(String request) {
         return request != null &&
-                request.startsWith(REQUEST_PREFIX) &&
-                request.endsWith(REQUEST_SUFFIX) &&
-                request.contains(AUTH_REQUEST_PATTERN);
+                request.startsWith(AUTH_REQUEST_PREFIX) &&
+                request.endsWith(AUTH_REQUEST_SUFFIX);
     }
 
-    private boolean isAssignRequest(String request) {
+    private boolean isStudentListRequest(String request) {
         return request != null &&
-                request.startsWith(REQUEST_PREFIX) &&
-                request.endsWith(REQUEST_SUFFIX) &&
-                request.contains(ASSIGN_REQUEST_PATTERN);
+                request.startsWith(STUDENT_LIST_PREFIX) &&
+                request.endsWith(STUDENT_LIST_SUFFIX);
     }
 
-    private boolean isStudentValidationRequest(String request) {
+    private boolean isSwipeCardRequest(String request) {
         return request != null &&
-                request.startsWith(STUDENT_VALIDATION_PREFIX) &&
-                request.endsWith(STUDENT_VALIDATION_SUFFIX);
+                request.startsWith(SWIPE_CARD_PREFIX) &&
+                request.endsWith(SWIPE_CARD_SUFFIX);
     }
 
-    private String processAssignRequest(String request) {
+    private void processStudentListRequest(String request, PrintWriter out) {
         try {
-            String deviceId = extractDeviceIdForAssign(request);
-            if (deviceId == null || deviceId.isEmpty()) {
-                System.err.println("❌ Invalid device ID in assign request: " + request);
-                return null;
+            // Extract device ID, school ID, route ID, and count from format: 1002BNG0000001AC1F0002RT7F0001StudentListAAAA
+            String deviceId = extractDeviceIdFromStudentListRequest(request);
+            String schoolId = extractSchoolIdFromStudentListRequest(request);
+            String routeId = extractRouteIdFromStudentListRequest(request);
+            String count = extractCountFromStudentListRequest(request);
+
+            System.out.println("🔍 Extracted - Device ID: " + deviceId + 
+                    ", School ID: " + schoolId + 
+                    ", Route ID: " + routeId + 
+                    ", Count: " + (count != null ? count : "N/A"));
+
+            if (deviceId == null || schoolId == null || routeId == null) {
+                System.err.println("❌ Invalid student list request format: " + request);
+                return;
             }
 
-            // Extract school ID from request
-            String schoolId = extractSchoolIdForAssign(request);
-            if (schoolId == null || schoolId.isEmpty()) {
-                System.err.println("❌ Invalid school ID in assign request: " + request);
-                return null;
-            }
-
-            // Check if this device already has an assigned route
-            Route alreadyAssigned = routeRepository.findByDeviceIdAndAssignedTrue(deviceId);
-            if (alreadyAssigned != null) {
-                // Respond with the same assignment
-                String response = "#SMV_" + deviceId + "_1001_" +
-                    alreadyAssigned.getSchool().getId() + "_" + alreadyAssigned.getSmRouteId() + "_AAAA";
-                
-                // Fetch all students for the already assigned route
-                List<Student> students = studentRepository.findAllByRoute_Id(alreadyAssigned.getId());
-                if (!students.isEmpty()) {
-                    StringBuilder studentList = new StringBuilder();
-                    for (Student student : students) {
-                        // Format: #SMV_DEV1_1002_RT0F0002_ST0F0002_AAAA
-                        studentList.append("#SMV_").append(deviceId).append("_1002_").append(alreadyAssigned.getSmRouteId()).append("_").append(student.getSmStudentId()).append("_AAAA");
-                        studentList.append("\n");
-                    }
-                    // Add END marker: #SMV_DEV1_1002_END_AAAA
-                    studentList.append("#SMV_").append(deviceId).append("_1002_END_AAAA");
-                    response += "\n" + studentList.toString();
-                }
-                
-                return response;
-            }
-
-            // Find first unassigned route for the specific school
-            Route route = routeRepository.findFirstBySchool_IdAndAssignedFalseOrAssignedIsNull(schoolId);
-            if (route == null) {
-                System.out.println("⚠️ No unassigned route available for school: " + schoolId);
-                return "#SMV_" + deviceId + "_1001_" + schoolId + "_NO_ROUTE_AVAILABLE_AAAA";
-            }
-
-            // Assign the route
-            route.setAssigned(true);
-            route.setDeviceId(deviceId);
-            routeRepository.save(route);
-
-            // Build response: #SMV_DEV1_1001_AC0F0001_RT1F0001_AAAA
-            String response = "#SMV_" + deviceId + "_1001_" +
-                route.getSchool().getId() + "_" + route.getSmRouteId() + "_AAAA";
-
-                            // Fetch all students for the assigned route
-                List<Student> students = studentRepository.findAllByRoute_Id(route.getId());
-                if (!students.isEmpty()) {
-                    StringBuilder studentList = new StringBuilder();
-                    for (Student student : students) {
-                        // Format: #SMV_DEV1_1002_RT0F0002_ST0F0002_AAAA
-                        studentList.append("#SMV_").append(deviceId).append("_1002_").append(route.getSmRouteId()).append("_").append(student.getSmStudentId()).append("_AAAA");
-                        studentList.append("\n");
-                    }
-                    // Add END marker: #SMV_DEV1_1002_END_AAAA
-                    studentList.append("#SMV_").append(deviceId).append("_1002_END_AAAA");
-                    response += "\n" + studentList.toString();
-                }
-
-            return response;
-        } catch (Exception e) {
-            System.err.println("❌ Error processing assign request: " + e.getMessage());
-            e.printStackTrace();
-            return null;
-        }
-    }
-
-    private String processStudentValidationRequest(String request) {
-        try {
-            // Extract student ID from format #SMVSTD_ST0F0002AAAA
-            String studentId = request.substring(STUDENT_VALIDATION_PREFIX.length(), request.indexOf(STUDENT_VALIDATION_SUFFIX));
-            System.out.println("🔍 Extracted student ID: " + studentId);
-            System.out.println("📝 Processing student validation request: " + request);
-
-            // Get the latest swipe for the student
-            SwipeStudentDevice latestSwipe = swipeStudentDeviceRepository.findTopByStudentIdOrderByTimestampDesc(studentId);
-
-            if (latestSwipe == null) {
-                // No swipe found, send failure
-                return buildStudentValidationResponse(studentId, STUDENT_VALIDATION_FAILURE);
-            }
-
-            // 1. Check if student exists
-            Optional<Student> studentOpt = studentRepository.findBySmStudentId(latestSwipe.getStudentId());
-            if (studentOpt.isEmpty()) {
-                // Student not found
-                return buildStudentValidationResponse(studentId, STUDENT_VALIDATION_FAILURE);
-            }
-            Student student = studentOpt.get();
-
-            // 2. Check if student is linked to the school
-            if (!student.getSchool().getId().equals(latestSwipe.getSchoolId())) {
-                // Student not linked to this school
-                return buildStudentValidationResponse(studentId, STUDENT_VALIDATION_FAILURE);
-            }
-
-            // 3. Check if route exists and is linked to the same school
-            Optional<Route> routeOpt = routeRepository.findBySmRouteId(latestSwipe.getRouteId());
+            // Find the route by sm_route_id
+            Optional<Route> routeOpt = routeRepository.findBySmRouteId(routeId);
             if (routeOpt.isEmpty()) {
-                // Route not found
-                return buildStudentValidationResponse(studentId, STUDENT_VALIDATION_FAILURE);
+                System.err.println("❌ Route not found: " + routeId);
+                return;
             }
+
             Route route = routeOpt.get();
-            if (!route.getSchool().getId().equals(latestSwipe.getSchoolId())) {
-                // Route not linked to this school
-                return buildStudentValidationResponse(studentId, STUDENT_VALIDATION_FAILURE);
+
+            // Get all students for this route
+            List<Student> students = studentRepository.findAllByRoute_Id(route.getId());
+            System.out.println("📊 Found " + students.size() + " students for route: " + routeId);
+
+            // Validate count for new format (optional)
+            if (count != null) {
+                try {
+                    int expectedCount = Integer.parseInt(count);
+                    if (students.size() != expectedCount) {
+                        System.out.println("⚠️ Warning: Expected student count (" + expectedCount + 
+                                ") does not match actual count (" + students.size() + ")");
+                    }
+                } catch (NumberFormatException e) {
+                    System.err.println("❌ Invalid count format: " + count);
+                }
             }
 
-            // 4. All checks passed, send success
-            return buildStudentValidationResponse(studentId, STUDENT_VALIDATION_SUCCESS);
+            // Send students one by one with 1-second delay
+            for (int i = 0; i < students.size(); i++) {
+                Student student = students.get(i);
+                String studentResponse = "1002" + deviceId + schoolId + routeId + student.getSmStudentId() + "AAAA";
+
+                // Schedule the response with delay
+                final int index = i;
+                scheduler.schedule(() -> {
+                    try {
+                        out.println(studentResponse);
+                        System.out.println("📤 Sent student " + (index + 1) + "/" + students.size() + ": " + studentResponse);
+                    } catch (Exception e) {
+                        System.err.println("❌ Error sending student response: " + e.getMessage());
+                    }
+                }, i + 1, TimeUnit.SECONDS);
+            }
+
+            // Send END marker after all students
+            String endResponse = "1002" + deviceId + schoolId + routeId + "ENDAAAA";
+            scheduler.schedule(() -> {
+                try {
+                    out.println(endResponse);
+                    System.out.println("📤 Sent END marker: " + endResponse);
+                } catch (Exception e) {
+                    System.err.println("❌ Error sending END marker: " + e.getMessage());
+                }
+            }, students.size() + 1, TimeUnit.SECONDS);
 
         } catch (Exception e) {
-            System.err.println("❌ Error processing student validation request: " + request + " - " + e.getMessage());
+            System.err.println("❌ Error processing student list request: " + request + " - " + e.getMessage());
             e.printStackTrace();
+        }
+    }
+
+    private String extractDeviceIdFromStudentListRequest(String request) {
+        try {
+            // Remove prefix (1002) and suffix (StudentListAAAA)
+            String content = request.substring(STUDENT_LIST_PREFIX.length(),
+                    request.length() - STUDENT_LIST_SUFFIX.length());
+
+            // Extract device ID (first 10 characters after 1002)
+            if (content.length() >= 10) {
+                return content.substring(0, 10);
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Error extracting device ID from student list request: " + e.getMessage());
+        }
+        return null;
+    }
+
+    private String extractSchoolIdFromStudentListRequest(String request) {
+        try {
+            // Remove prefix (1002) and suffix (StudentListAAAA)
+            String content = request.substring(STUDENT_LIST_PREFIX.length(),
+                    request.length() - STUDENT_LIST_SUFFIX.length());
+
+            // Check if this is new format (28 characters total) or old format (24 characters total)
+            if (content.length() >= 28) {
+                // New format: school ID is 8 characters (positions 10-18)
+                return content.substring(10, 18);
+            } else if (content.length() >= 24) {
+                // Old format: school ID is 7 characters (positions 10-17)
+                return content.substring(10, 17);
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Error extracting school ID from student list request: " + e.getMessage());
+        }
+        return null;
+    }
+
+    private String extractRouteIdFromStudentListRequest(String request) {
+        try {
+            // Remove prefix (1002) and suffix (StudentListAAAA)
+            String content = request.substring(STUDENT_LIST_PREFIX.length(),
+                    request.length() - STUDENT_LIST_SUFFIX.length());
+
+            // Check if this is new format (28 characters total) or old format (24 characters total)
+            if (content.length() >= 28) {
+                // New format: route ID is 8 characters (positions 18-26)
+                return content.substring(18, 26);
+            } else if (content.length() >= 24) {
+                // Old format: route ID is 7 characters (positions 17-24)
+                return content.substring(17, 24);
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Error extracting route ID from student list request: " + e.getMessage());
+        }
+        return null;
+    }
+
+    private String extractCountFromStudentListRequest(String request) {
+        try {
+            // Remove prefix (1002) and suffix (StudentListAAAA)
+            String content = request.substring(STUDENT_LIST_PREFIX.length(),
+                    request.length() - STUDENT_LIST_SUFFIX.length());
+
+            // Check if this is new format (28 characters total)
+            if (content.length() >= 28) {
+                // New format: count is 2 characters (positions 26-28)
+                return content.substring(26, 28);
+            }
+            // Old format: no count field
             return null;
-        }
-    }
-
-    private String buildStudentValidationResponse(String studentId, String status) {
-        return STUDENT_VALIDATION_PREFIX + studentId + status + STUDENT_VALIDATION_SUFFIX;
-    }
-
-    private String extractDeviceIdForAssign(String request) {
-        try {
-            // Remove prefix and suffix
-            String content = request.substring(REQUEST_PREFIX.length(), request.length() - REQUEST_SUFFIX.length());
-            // content: _DEV1_1001_School-Route Required
-            int start = content.indexOf("_") + 1;
-            int end = content.indexOf(ASSIGN_REQUEST_PATTERN);
-            if (start >= 0 && end > start) {
-                return content.substring(start, end);
-            }
         } catch (Exception e) {
-            System.err.println("❌ Error extracting device ID for assign: " + e.getMessage());
+            System.err.println("❌ Error extracting count from student list request: " + e.getMessage());
         }
         return null;
     }
 
-    private String extractSchoolIdForAssign(String request) {
+    private String processAuthRequest(String request, PrintWriter out) {
         try {
-            // Remove prefix and suffix
-            String content = request.substring(REQUEST_PREFIX.length(), request.length() - REQUEST_SUFFIX.length());
-            // content: _DEV1_1001_AC0F0001_Route Required
-            
-            // Find the school ID between _1001_ and _Route Required
-            int start = content.indexOf(ASSIGN_REQUEST_PATTERN) + ASSIGN_REQUEST_PATTERN.length();
-            int end = content.indexOf("_Route Required");
-            if (start >= 0 && end > start) {
-                return content.substring(start, end);
-            }
-        } catch (Exception e) {
-            System.err.println("❌ Error extracting school ID for assign: " + e.getMessage());
-        }
-        return null;
-    }
-
-    private String processAuthRequest(String request) {
-        try {
-            // Extract device ID from format #SMV_1000_AUTH_AAAA
+            // Extract device ID from format: 1000BNG0000001SSSSSSSSRRRRRRRRAUTHAAAA
             String deviceId = extractDeviceId(request);
             System.out.println("🔍 Extracted device ID: " + deviceId);
 
             if (deviceId == null || deviceId.isEmpty()) {
                 System.err.println("❌ Invalid device ID in auth request: " + request);
+                return null;
+            }
+
+            // Check if device exists in smv_device table and get school_id and route_id
+            DeviceInfo deviceInfo = getDeviceInfo(deviceId);
+            if (deviceInfo == null) {
+                System.err.println("❌ Device not found: " + deviceId);
                 return null;
             }
 
@@ -329,8 +394,11 @@ public class DeviceAuthTcpServerService {
                 return null;
             }
 
-            // Build response: #SMV_1000_JWT:"token"_AAAA
-            String response = REQUEST_PREFIX + AUTH_RESPONSE_PATTERN + "\"" + jwtToken + "\"" + REQUEST_SUFFIX;
+            // Build response: 1000BNG0000002AC1F0002RT7F0001authtokenAAAA
+            String response = "1000" + deviceId + deviceInfo.getSchoolId() + deviceInfo.getRouteId() + jwtToken + "AAAA";
+
+            // Schedule student count response after 3 seconds
+            scheduleStudentCountResponse(deviceId, deviceInfo.getSchoolId(), deviceInfo.getRouteId(), out);
 
             System.out.println("📤 Sending auth response for device " + deviceId);
             return response;
@@ -342,46 +410,194 @@ public class DeviceAuthTcpServerService {
         }
     }
 
+    private String processSwipeCardRequest(String request) {
+        try {
+            // Extract school ID, route ID, and student ID from format: 1004AC1F0002RT7F0001ST6F0003AAAA
+            String schoolId = extractSchoolIdFromSwipeCardRequest(request);
+            String routeId = extractRouteIdFromSwipeCardRequest(request);
+            String studentId = extractStudentIdFromSwipeCardRequest(request);
+
+            System.out.println("🔍 Extracted - School ID: " + schoolId + ", Route ID: " + routeId + ", Student ID: " + studentId);
+
+            if (schoolId == null || routeId == null || studentId == null) {
+                System.err.println("❌ Invalid swipe card request format: " + request);
+                return buildSwipeCardResponse(schoolId, routeId, studentId, "06");
+            }
+
+            // 1. Query SwipeStudentDeviceRepository for the latest swipe record for the studentId
+            SwipeStudentDevice latestSwipe = swipeStudentDeviceRepository.findTopByStudentIdOrderByTimestampDesc(studentId);
+            if (latestSwipe == null) {
+                System.err.println("❌ No swipe record found for student: " + studentId);
+                return buildSwipeCardResponse(schoolId, routeId, studentId, "06");
+            }
+
+            // 2. Verify the student exists in StudentRepository
+            Optional<Student> studentOpt = studentRepository.findBySmStudentId(studentId);
+            if (studentOpt.isEmpty()) {
+                System.err.println("❌ Student not found: " + studentId);
+                return buildSwipeCardResponse(schoolId, routeId, studentId, "06");
+            }
+            Student student = studentOpt.get();
+
+            // 3. Check if the student's school matches the swipe's school ID
+            if (student.getSchool() == null || !student.getSchool().getId().equals(latestSwipe.getSchoolId())) {
+                System.err.println("❌ Student's school doesn't match swipe's school ID");
+                return buildSwipeCardResponse(schoolId, routeId, studentId, "06");
+            }
+
+            // 4. Verify the route exists in RouteRepository and is linked to the same school
+            Optional<Route> routeOpt = routeRepository.findBySmRouteId(routeId);
+            if (routeOpt.isEmpty()) {
+                System.err.println("❌ Route not found: " + routeId);
+                return buildSwipeCardResponse(schoolId, routeId, studentId, "06");
+            }
+            Route route = routeOpt.get();
+            if (route.getSchool() == null || !route.getSchool().getId().equals(latestSwipe.getSchoolId())) {
+                System.err.println("❌ Route's school doesn't match swipe's school ID");
+                return buildSwipeCardResponse(schoolId, routeId, studentId, "06");
+            }
+
+            // 5. Construct FTP path: /upload/school_id/imagename.jpg
+            String ftpPath = buildFtpPathFromSwipe(latestSwipe);
+            if (ftpPath == null || ftpPath.isEmpty()) {
+                System.err.println("❌ Failed to construct FTP path");
+                return buildSwipeCardResponse(schoolId, routeId, studentId, "06");
+            }
+
+            // 6. Send to Python server and get response
+            String pythonResponse = sendFtpPathToPythonServer(ftpPath, studentId, schoolId, routeId);
+            if (pythonResponse == null) {
+                System.err.println("❌ Python connection failed - sending error code 07");
+                return buildSwipeCardResponse(schoolId, routeId, studentId, "07");
+            }
+
+            // 7. Map Python response to our format
+            String responseCode = mapPythonResponseToCode(pythonResponse);
+            return buildSwipeCardResponse(schoolId, routeId, studentId, responseCode);
+
+        } catch (Exception e) {
+            System.err.println("❌ Error processing swipe card request: " + request + " - " + e.getMessage());
+            e.printStackTrace();
+            return buildSwipeCardResponse(null, null, null, "06");
+        }
+    }
+
+    private String buildSwipeCardResponse(String schoolId, String routeId, String studentId, String code) {
+        if (schoolId == null || routeId == null || studentId == null) {
+            return "1004" + "0000000" + "0000000" + "0000000" + code + "AAAA";
+        }
+        return "1004" + schoolId + routeId + studentId + code + "AAAA";
+    }
+
+    private String extractStudentIdFromSwipeCardRequest(String request) {
+        try {
+            // Remove prefix (1004) and suffix (AAAA)
+            String content = request.substring(SWIPE_CARD_PREFIX.length(),
+                    request.length() - SWIPE_CARD_SUFFIX.length());
+
+            // Extract student ID (characters 16-23 after 1004)
+            if (content.length() >= 24) {
+                return content.substring(16, 24);
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Error extracting student ID from swipe card request: " + e.getMessage());
+        }
+        return null;
+    }
+
     private String extractDeviceId(String request) {
         try {
-            System.out.println("🔍 DEBUG: Processing request: '" + request + "'");
+            // Remove prefix (1000) and suffix (AUTHAAAA)
+            String content = request.substring(AUTH_REQUEST_PREFIX.length(),
+                    request.length() - AUTH_REQUEST_SUFFIX.length());
 
-            // Remove prefix and suffix
-            String content = request.substring(REQUEST_PREFIX.length(),
-                    request.length() - REQUEST_SUFFIX.length());
-            System.out.println("🔍 DEBUG: After removing prefix/suffix: '" + content + "'");
-
-            // Check if it's an auth request
-            if (content.contains(AUTH_REQUEST_PATTERN)) {
-                System.out.println("🔍 DEBUG: Contains AUTH_REQUEST_PATTERN: '" + AUTH_REQUEST_PATTERN + "'");
-
-                // Extract device ID (everything before _1000_AUTH_)
-                int authIndex = content.indexOf(AUTH_REQUEST_PATTERN);
-                System.out.println("🔍 DEBUG: AUTH_REQUEST_PATTERN found at index: " + authIndex);
-
-                if (authIndex > 0) {
-                    String deviceId = content.substring(0, authIndex);
-                    System.out.println("🔍 DEBUG: Extracted device ID (before cleanup): '" + deviceId + "'");
-
-                    // Remove leading underscore if present
-                    if (deviceId.startsWith("_")) {
-                        deviceId = deviceId.substring(1);
-                        System.out.println("🔍 DEBUG: Removed leading underscore: '" + deviceId + "'");
-                    }
-
-                    System.out.println("🔍 DEBUG: Final device ID: '" + deviceId + "'");
-                    return deviceId;
-                } else {
-                    System.out.println("🔍 DEBUG: authIndex is not > 0, it's: " + authIndex);
-                }
-            } else {
-                System.out.println("🔍 DEBUG: Does NOT contain AUTH_REQUEST_PATTERN: '" + AUTH_REQUEST_PATTERN + "'");
+            // Extract device ID (first 10 characters after 1000)
+            if (content.length() >= 10) {
+                return content.substring(0, 10);
             }
         } catch (Exception e) {
             System.err.println("❌ Error extracting device ID: " + e.getMessage());
-            e.printStackTrace();
         }
         return null;
+    }
+
+    private String extractSchoolIdFromSwipeCardRequest(String request) {
+        try {
+            // Remove prefix (1004) and suffix (AAAA)
+            String content = request.substring(SWIPE_CARD_PREFIX.length(),
+                    request.length() - SWIPE_CARD_SUFFIX.length());
+
+            // Extract school ID (first 8 characters after 1004)
+            if (content.length() >= 8) {
+                return content.substring(0, 8);
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Error extracting school ID from swipe card request: " + e.getMessage());
+        }
+        return null;
+    }
+
+    private String extractRouteIdFromSwipeCardRequest(String request) {
+        try {
+            // Remove prefix (1004) and suffix (AAAA)
+            String content = request.substring(SWIPE_CARD_PREFIX.length(),
+                    request.length() - SWIPE_CARD_SUFFIX.length());
+
+            // Extract route ID (characters 8-15 after 1004)
+            if (content.length() >= 16) {
+                return content.substring(8, 16);
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Error extracting route ID from swipe card request: " + e.getMessage());
+        }
+        return null;
+    }
+
+    private DeviceInfo getDeviceInfo(String deviceId) {
+        try {
+            // Query smv_device table for device_id, school_id, route_id
+            Optional<Device> deviceOpt = deviceRepository.findByDeviceId(deviceId);
+            if (deviceOpt.isPresent()) {
+                Device device = deviceOpt.get();
+                return new DeviceInfo(device.getSchoolId(), device.getRouteId());
+            }
+            return null;
+        } catch (Exception e) {
+            System.err.println("❌ Error getting device info: " + e.getMessage());
+            return null;
+        }
+    }
+
+    private void scheduleStudentCountResponse(String deviceId, String schoolId, String routeId, PrintWriter out) {
+        scheduler.schedule(() -> {
+            try {
+                int studentCount = getStudentCount(schoolId, routeId);
+                String formattedStudentCount = String.format("%02d", studentCount);
+                String studentCountResponse = "1001" + deviceId + schoolId + routeId + formattedStudentCount + "AAAA";
+                out.println(studentCountResponse);
+                System.out.println("📤 Sent student count response: " + studentCountResponse);
+            } catch (Exception e) {
+                System.err.println("❌ Error sending student count response: " + e.getMessage());
+            }
+        }, 3, TimeUnit.SECONDS);
+    }
+
+    private int getStudentCount(String schoolId, String routeId) {
+        try {
+            // Query for student count based on school_id and route_id
+            // First find the route by sm_route_id
+            Optional<Route> routeOpt = routeRepository.findBySmRouteId(routeId);
+            if (routeOpt.isPresent()) {
+                Route route = routeOpt.get();
+                // Count students for this route
+                List<Student> students = studentRepository.findAllByRoute_Id(route.getId());
+                return students.size();
+            }
+            return 0;
+        } catch (Exception e) {
+            System.err.println("❌ Error getting student count: " + e.getMessage());
+            return 0;
+        }
     }
 
     private String generateJwtForDevice(String deviceId) {
@@ -399,6 +615,94 @@ public class DeviceAuthTcpServerService {
         } catch (Exception e) {
             System.err.println("❌ Error generating JWT: " + e.getMessage());
             return null;
+        }
+    }
+
+    private String buildFtpPathFromSwipe(SwipeStudentDevice swipe) {
+        if (swipe == null || swipe.getSchoolId() == null || swipe.getImageName() == null) {
+            return null;
+        }
+        // Format: /upload/{schoolId}/{imageName}
+        return "/upload/" + swipe.getSchoolId() + "/" + swipe.getImageName();
+    }
+
+    private String sendFtpPathToPythonServer(String ftpPath, String studentId, String schoolId, String routeId) {
+        try {
+            // Connect to Python server (adjust IP and port as needed)
+            try (Socket pythonSocket = new Socket("68.178.203.99", 5005);
+                 PrintWriter out = new PrintWriter(pythonSocket.getOutputStream(), true);
+                 BufferedReader in = new BufferedReader(new InputStreamReader(pythonSocket.getInputStream()))) {
+
+                // Prepare payload for Python server
+                Map<String, String> payload = new HashMap<>();
+                payload.put("ftpPath", ftpPath);
+                payload.put("studentId", studentId);
+                payload.put("schoolId", schoolId);
+                payload.put("routeId", routeId);
+                payload.put("type", "swipe_card_validation");
+
+                ObjectMapper objectMapper = new ObjectMapper();
+                String jsonPayload = objectMapper.writeValueAsString(payload);
+
+                // Send to Python server
+                out.println(jsonPayload);
+                System.out.println("📤 Sent FTP path to Python server: " + ftpPath);
+
+                // Read response from Python server (expects codes like 00,01,...)
+                String pythonResponse = in.readLine();
+                if (pythonResponse != null) {
+                    System.out.println("📥 Python server response: " + pythonResponse);
+                    // Extract leading code before comma if payload contains extra data
+                    String code = pythonResponse.split(",")[0].trim();
+                    return code;
+                }
+            } catch (IOException e) {
+                System.err.println("❌ Failed to send FTP path to Python server: " + e.getMessage());
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Error sending FTP path to Python server: " + e.getMessage());
+        }
+        return null;
+    }
+
+    private String mapPythonResponseToCode(String pythonResponse) {
+        if (pythonResponse == null) {
+            return "07"; // Python connection failed
+        }
+
+        String normalized = pythonResponse.trim();
+        if (normalized.length() > 2) {
+            normalized = normalized.substring(0, 2);
+        }
+
+        switch (normalized) {
+            case "00": return "00"; // successful
+            case "01": return "01"; // Image not matched confidence not enough
+            case "02": return "02"; // error student id not found
+            case "03": return "03"; // no face found
+            case "04": return "04"; // image is blur
+            case "05": return "05"; // no encodings found (student not trained)
+            case "07": return "07"; // Python connection failed
+            default: return "06";   // other failure response
+        }
+    }
+
+    // Helper class to hold device information
+    private static class DeviceInfo {
+        private final String schoolId;
+        private final String routeId;
+
+        public DeviceInfo(String schoolId, String routeId) {
+            this.schoolId = schoolId;
+            this.routeId = routeId;
+        }
+
+        public String getSchoolId() {
+            return schoolId;
+        }
+
+        public String getRouteId() {
+            return routeId;
         }
     }
 }
