@@ -291,7 +291,7 @@ public class StudentController {
 
         // Send payload to Python Analyzer via socket communication
         String analyzerResponse;
-        try (Socket socket = new Socket("68.178.203.99",5004);
+        try (Socket socket = new Socket("127.0.0.1",5004);
              PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
              BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
 
