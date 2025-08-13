@@ -11,12 +11,15 @@ import com.smartvehicle.repository.SwipeStudentDeviceRepository;
 import com.smartvehicle.security.jwt.JwtUtils;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,6 +43,10 @@ public class DeviceAuthTcpServerService {
     private static final String SWIPE_CARD_PREFIX = "1004";
     private static final String SWIPE_CARD_SUFFIX = "AAAA";
 
+    // GPS Location constants
+    private static final String GPS_LOCATION_PREFIX = "1005";
+    private static final String GPS_LOCATION_SUFFIX = "GPSAAAA";
+
     @Autowired
     private JwtUtils jwtUtils;
     @Autowired
@@ -50,12 +57,14 @@ public class DeviceAuthTcpServerService {
     private SwipeStudentDeviceRepository swipeStudentDeviceRepository;
     @Autowired
     private DeviceRepository deviceRepository;
+    @Autowired
+    private SimpMessagingTemplate simpMessagingTemplate;
 
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
-    
+
     // State management for student list sending
     private final Map<String, StudentListState> deviceStates = new HashMap<>();
-    
+
     // State management by school and route combination
     private final Map<String, StudentListState> schoolRouteStates = new HashMap<>();
 
@@ -148,7 +157,7 @@ public class DeviceAuthTcpServerService {
 
     private String extractCompleteMessage(String data) {
         System.out.println("🔍 extractCompleteMessage called with data: '" + data + "'");
-        
+
         // Look for complete messages that end with expected suffixes
         if (data.contains("AUTHAAAA")) {
             int start = data.indexOf("1000");
@@ -176,6 +185,16 @@ public class DeviceAuthTcpServerService {
             if (start != -1 && end > start) {
                 String message = data.substring(start, end);
                 System.out.println("🔍 Found ACK message: '" + message + "'");
+                return message;
+            }
+        }
+
+        if (data.contains("GPSAAAA")) {
+            int start = data.indexOf("1005");
+            int end = data.indexOf("GPSAAAA") + "GPSAAAA".length();
+            if (start != -1 && end > start) {
+                String message = data.substring(start, end);
+                System.out.println("🔍 Found GPS message: '" + message + "'");
                 return message;
             }
         }
@@ -232,6 +251,9 @@ public class DeviceAuthTcpServerService {
         } else if (isAcknowledgmentMessage(message)) {
             System.out.println("🔍 Processing acknowledgment message: " + message);
             processAcknowledgmentMessage(message, out);
+        } else if (isGpsLocationMessage(message)) {
+            System.out.println("🔍 Processing GPS location message: " + message);
+            processGpsLocationMessage(message, out);
         } else {
             System.err.println("❌ Invalid request format received: " + message);
             System.err.println("❌ Message does not match any expected format");
@@ -262,17 +284,23 @@ public class DeviceAuthTcpServerService {
         return isAck;
     }
 
+    private boolean isGpsLocationMessage(String message) {
+        boolean isGps = message != null && message.startsWith(GPS_LOCATION_PREFIX) && message.endsWith(GPS_LOCATION_SUFFIX);
+        System.out.println("🔍 Checking if message is GPS location: '" + message + "' -> " + isGps);
+        return isGps;
+    }
+
     private void processAcknowledgmentMessage(String message, PrintWriter out) {
         try {
             System.out.println("🔍 Parsing acknowledgment message: " + message);
-            
+
             // Extract school ID, route ID, and student ID from acknowledgment format: 1002AC1F0002RT7F0001ST6F0001ACKAAAA
             String schoolId = extractSchoolIdFromAcknowledgment(message);
             String routeId = extractRouteIdFromAcknowledgment(message);
             String studentId = extractStudentIdFromAcknowledgment(message);
-            
-            System.out.println("✅ Received acknowledgment for - School ID: '" + schoolId + 
-                    "', Route ID: '" + routeId + 
+
+            System.out.println("✅ Received acknowledgment for - School ID: '" + schoolId +
+                    "', Route ID: '" + routeId +
                     "', Student ID: '" + studentId + "'");
 
             if (schoolId == null || routeId == null || studentId == null) {
@@ -281,10 +309,10 @@ public class DeviceAuthTcpServerService {
             }
 
             System.out.println("🚀 About to process next student for school: " + schoolId + " and route: " + routeId);
-            
+
             // Find the device that sent this student and process the next student
             processNextStudentForSchoolRoute(schoolId, routeId, studentId, out);
-            
+
         } catch (Exception e) {
             System.err.println("❌ Error processing acknowledgment message: " + message + " - " + e.getMessage());
             e.printStackTrace();
@@ -296,10 +324,10 @@ public class DeviceAuthTcpServerService {
             // Remove prefix (1002) and find school ID pattern
             // Acknowledgment format: 1002AC1F0002RT7F0001ST6F0001ACKAAAA
             String content = message.substring(4); // Remove "1002"
-            
+
             System.out.println("🔍 Acknowledgment content after removing prefix: '" + content + "'");
             System.out.println("🔍 Acknowledgment content length: " + content.length());
-            
+
             // School ID is first 8 characters after 1002
             if (content.length() >= 8) {
                 String schoolId = content.substring(0, 8);
@@ -317,7 +345,7 @@ public class DeviceAuthTcpServerService {
             // Remove prefix (1002) and find route ID pattern
             // Acknowledgment format: 1002AC1F0002RT7F0001ST6F0001ACKAAAA
             String content = message.substring(4); // Remove "1002"
-            
+
             // School ID is 8 characters, so Route ID starts at position 8
             if (content.length() >= 16) {
                 // Route ID is 8 characters (positions 8-16)
@@ -336,7 +364,7 @@ public class DeviceAuthTcpServerService {
             // Remove prefix (1002) and find student ID pattern
             // Acknowledgment format: 1002AC1F0002RT7F0001ST6F0001ACKAAAA
             String content = message.substring(4); // Remove "1002"
-            
+
             // School ID is 8 characters, Route ID is 8 characters, so Student ID starts at position 16
             if (content.length() >= 24) {
                 // Student ID is 8 characters (positions 16-24)
@@ -358,9 +386,9 @@ public class DeviceAuthTcpServerService {
             String routeId = extractRouteIdFromStudentListRequest(request);
             String count = extractCountFromStudentListRequest(request);
 
-            System.out.println("🔍 Extracted - Device ID: " + deviceId + 
-                    ", School ID: " + schoolId + 
-                    ", Route ID: " + routeId + 
+            System.out.println("🔍 Extracted - Device ID: " + deviceId +
+                    ", School ID: " + schoolId +
+                    ", Route ID: " + routeId +
                     ", Count: " + (count != null ? count : "N/A"));
 
             if (deviceId == null || schoolId == null || routeId == null) {
@@ -386,7 +414,7 @@ public class DeviceAuthTcpServerService {
                 try {
                     int expectedCount = Integer.parseInt(count);
                     if (students.size() != expectedCount) {
-                        System.out.println("⚠️ Warning: Expected student count (" + expectedCount + 
+                        System.out.println("⚠️ Warning: Expected student count (" + expectedCount +
                                 ") does not match actual count (" + students.size() + ")");
                     }
                 } catch (NumberFormatException e) {
@@ -403,8 +431,8 @@ public class DeviceAuthTcpServerService {
         }
     }
 
-    private void startAcknowledgmentBasedStudentSending(String deviceId, String schoolId, String routeId, 
-                                                      List<Student> students, PrintWriter out) {
+    private void startAcknowledgmentBasedStudentSending(String deviceId, String schoolId, String routeId,
+                                                        List<Student> students, PrintWriter out) {
         if (students.isEmpty()) {
             // Send END marker immediately if no students
             String endResponse = "1002" + deviceId + schoolId + routeId + "ENDAAAA";
@@ -416,11 +444,11 @@ public class DeviceAuthTcpServerService {
         // Initialize state for this school and route combination
         String schoolRouteKey = schoolId + "_" + routeId;
         System.out.println("🔑 Creating state with key: '" + schoolRouteKey + "' for device: " + deviceId);
-        
+
         StudentListState state = new StudentListState(students, deviceId);
         schoolRouteStates.put(schoolRouteKey, state);
-        
-        System.out.println("🚀 Starting acknowledgment-based student sending for device " + deviceId + 
+
+        System.out.println("🚀 Starting acknowledgment-based student sending for device " + deviceId +
                 " with " + students.size() + " students");
         System.out.println("🔑 State stored with key: '" + schoolRouteKey + "'");
         System.out.println("🔑 Total states in map after storing: " + schoolRouteStates.size());
@@ -428,7 +456,7 @@ public class DeviceAuthTcpServerService {
 
         // Send first student immediately
         sendNextStudentForSchoolRoute(schoolId, routeId, students, state, out);
-        
+
         // Schedule a timeout to clean up if no acknowledgment is received
         scheduleTimeoutForSchoolRoute(schoolId, routeId, students.size());
     }
@@ -436,7 +464,7 @@ public class DeviceAuthTcpServerService {
     private void scheduleTimeoutForSchoolRoute(String schoolId, String routeId, int studentCount) {
         // Set a timeout based on the number of students (30 seconds per student + 10 seconds buffer)
         int timeoutSeconds = (studentCount * 30) + 10;
-        
+
         scheduler.schedule(() -> {
             String schoolRouteKey = schoolId + "_" + routeId;
             StudentListState state = schoolRouteStates.get(schoolRouteKey);
@@ -445,8 +473,8 @@ public class DeviceAuthTcpServerService {
                 schoolRouteStates.remove(schoolRouteKey);
             }
         }, timeoutSeconds, TimeUnit.SECONDS);
-        
-        System.out.println("⏰ Scheduled timeout for school: " + schoolId + " and route: " + routeId + 
+
+        System.out.println("⏰ Scheduled timeout for school: " + schoolId + " and route: " + routeId +
                 " in " + timeoutSeconds + " seconds");
     }
 
@@ -612,21 +640,35 @@ public class DeviceAuthTcpServerService {
                 return buildSwipeCardResponse(schoolId, routeId, studentId, "06");
             }
 
-            // 5. Construct FTP path: /upload/school_id/imagename.jpg
+            // 5. Get the latest GPS coordinates for this student from the swipe record
+            Double latitude = parseDoubleSafely(latestSwipe.getLatitude());
+            Double longitude = parseDoubleSafely(latestSwipe.getLongitude());
+
+            if (latitude != null && longitude != null) {
+                System.out.println("📍 Found GPS coordinates for student " + studentId +
+                        " - Lat: " + latitude + ", Lon: " + longitude);
+
+                // 6. Send GPS location data to frontend via WebSocket
+                sendSwipeLocationToFrontend(schoolId, routeId, studentId, latitude, longitude, latestSwipe.getImageName());
+            } else {
+                System.out.println("⚠️ No GPS coordinates found for student " + studentId);
+            }
+
+            // 7. Construct FTP path: /upload/school_id/route_id/imagename.jpg
             String ftpPath = buildFtpPathFromSwipe(latestSwipe);
             if (ftpPath == null || ftpPath.isEmpty()) {
                 System.err.println("❌ Failed to construct FTP path");
                 return buildSwipeCardResponse(schoolId, routeId, studentId, "06");
             }
 
-            // 6. Send to Python server and get response
+            // 8. Send to Python server and get response
             String pythonResponse = sendFtpPathToPythonServer(ftpPath, studentId, schoolId, routeId);
             if (pythonResponse == null) {
                 System.err.println("❌ Python connection failed - sending error code 07");
                 return buildSwipeCardResponse(schoolId, routeId, studentId, "07");
             }
 
-            // 7. Map Python response to our format
+            // 9. Map Python response to our format
             String responseCode = mapPythonResponseToCode(pythonResponse);
             return buildSwipeCardResponse(schoolId, routeId, studentId, responseCode);
 
@@ -634,6 +676,57 @@ public class DeviceAuthTcpServerService {
             System.err.println("❌ Error processing swipe card request: " + request + " - " + e.getMessage());
             e.printStackTrace();
             return buildSwipeCardResponse(null, null, null, "06");
+        }
+    }
+
+    private void sendSwipeLocationToFrontend(String schoolId, String routeId, String studentId,
+                                             Double latitude, Double longitude, String imageName) {
+        try {
+            // Create swipe location data for frontend
+            Map<String, Object> swipeData = new HashMap<>();
+            swipeData.put("schoolId", schoolId);
+            swipeData.put("routeId", routeId);
+            swipeData.put("studentId", studentId);
+            swipeData.put("latitude", latitude);
+            swipeData.put("longitude", longitude);
+            swipeData.put("imageName", imageName);
+            swipeData.put("timestamp", LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+            swipeData.put("type", "student_swipe_location");
+
+            // Convert to JSON
+            ObjectMapper objectMapper = new ObjectMapper();
+            String jsonData = objectMapper.writeValueAsString(swipeData);
+
+            // Send to general swipe topic
+            simpMessagingTemplate.convertAndSend("/topic/student-swipes", jsonData);
+
+            // Send to specific school and route topic
+            String schoolRouteTopic = "/topic/swipes/" + schoolId + "/" + routeId;
+            simpMessagingTemplate.convertAndSend(schoolRouteTopic, jsonData);
+
+            System.out.println("📡 Sent swipe location to frontend - Student: " + studentId +
+                    ", School: " + schoolId + ", Route: " + routeId +
+                    ", Coordinates: " + latitude + ", " + longitude);
+            System.out.println("📡 Topics: /topic/student-swipes and " + schoolRouteTopic);
+
+        } catch (Exception e) {
+            System.err.println("❌ Error sending swipe location to frontend: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Safely parse a String to Double, returning null if parsing fails
+     */
+    private Double parseDoubleSafely(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            return Double.parseDouble(value.trim());
+        } catch (NumberFormatException e) {
+            System.err.println("❌ Error parsing coordinate value: '" + value + "' - " + e.getMessage());
+            return null;
         }
     }
 
@@ -784,7 +877,7 @@ public class DeviceAuthTcpServerService {
     private String sendFtpPathToPythonServer(String ftpPath, String studentId, String schoolId, String routeId) {
         try {
             // Connect to Python server (adjust IP and port as needed)
-            try (Socket pythonSocket = new Socket("68.178.203.99", 5004);
+            try (Socket pythonSocket = new Socket("68.178.203.99", 5006);
                  PrintWriter out = new PrintWriter(pythonSocket.getOutputStream(), true);
                  BufferedReader in = new BufferedReader(new InputStreamReader(pythonSocket.getInputStream()))) {
 
@@ -860,27 +953,27 @@ public class DeviceAuthTcpServerService {
             return routeId;
         }
     }
-    
+
     // Helper class to track student list sending state for each device
     private static class StudentListState {
         private int currentIndex;
         private final List<Student> students;
         private final String deviceId;
-        
+
         public StudentListState(List<Student> students, String deviceId) {
             this.students = students;
             this.deviceId = deviceId;
             this.currentIndex = 0;
         }
-        
+
         public int getCurrentIndex() {
             return currentIndex;
         }
-        
+
         public List<Student> getStudents() {
             return students;
         }
-        
+
         public String getDeviceId() {
             return deviceId;
         }
@@ -890,17 +983,17 @@ public class DeviceAuthTcpServerService {
         try {
             // Create a key for school and route combination
             String schoolRouteKey = schoolId + "_" + routeId;
-            
+
             System.out.println("🔍 Looking for state with key: '" + schoolRouteKey + "'");
             System.out.println("🔍 Available school-route keys: " + schoolRouteStates.keySet());
             System.out.println("🔍 Total states in map: " + schoolRouteStates.size());
-            
+
             // Debug: Print each key-value pair
             for (Map.Entry<String, StudentListState> entry : schoolRouteStates.entrySet()) {
-                System.out.println("🔍 State entry - Key: '" + entry.getKey() + "', Device: " + entry.getValue().getDeviceId() + 
+                System.out.println("🔍 State entry - Key: '" + entry.getKey() + "', Device: " + entry.getValue().getDeviceId() +
                         ", Index: " + entry.getValue().getCurrentIndex() + ", Students: " + entry.getValue().getStudents().size());
             }
-            
+
             // Get the current state for this school and route
             StudentListState state = schoolRouteStates.get(schoolRouteKey);
             if (state == null) {
@@ -908,11 +1001,11 @@ public class DeviceAuthTcpServerService {
                 System.err.println("❌ This means the acknowledgment was received but no student list request was processed first");
                 return;
             }
-            
-            System.out.println("✅ Processing acknowledgment for student: " + studentId + 
+
+            System.out.println("✅ Processing acknowledgment for student: " + studentId +
                     " in school: " + schoolId + " and route: " + routeId);
             System.out.println("✅ Current state - Index: " + state.currentIndex + ", Total students: " + state.students.size());
-            
+
             // Find the route by sm_route_id
             Optional<Route> routeOpt = routeRepository.findBySmRouteId(routeId);
             if (routeOpt.isEmpty()) {
@@ -922,43 +1015,218 @@ public class DeviceAuthTcpServerService {
 
             Route route = routeOpt.get();
             List<Student> students = studentRepository.findAllByRoute_Id(route.getId());
-            
+
             // Send the next student
             sendNextStudentForSchoolRoute(schoolId, routeId, students, state, out);
-            
+
         } catch (Exception e) {
             System.err.println("❌ Error processing next student for school route: " + e.getMessage());
             e.printStackTrace();
         }
     }
 
-    private void sendNextStudentForSchoolRoute(String schoolId, String routeId, 
-                                             List<Student> students, StudentListState state, PrintWriter out) {
+    private void sendNextStudentForSchoolRoute(String schoolId, String routeId,
+                                               List<Student> students, StudentListState state, PrintWriter out) {
         if (state.currentIndex >= students.size()) {
             // All students sent, send END marker
             String endResponse = "1002" + state.getDeviceId() + schoolId + routeId + "ENDAAAA";
             out.println(endResponse);
             System.out.println("📤 Sent END marker: " + endResponse);
-            
+
             // Clean up the state
             String schoolRouteKey = schoolId + "_" + routeId;
             schoolRouteStates.remove(schoolRouteKey);
-            System.out.println("✅ Completed student list sending for school: " + schoolId + 
+            System.out.println("✅ Completed student list sending for school: " + schoolId +
                     " and route: " + routeId + " - cleaned up state");
             return;
         }
 
         Student student = students.get(state.currentIndex);
         String studentResponse = "1002" + state.getDeviceId() + schoolId + routeId + student.getSmStudentId() + "AAAA";
-        
+
         out.println(studentResponse);
-        System.out.println("📤 Sent student " + (state.currentIndex + 1) + "/" + students.size() + 
+        System.out.println("📤 Sent student " + (state.currentIndex + 1) + "/" + students.size() +
                 " for school: " + schoolId + " and route: " + routeId + ": " + studentResponse);
-        
+
         // Increment the index for next acknowledgment
         state.currentIndex++;
-        
-        System.out.println("⏳ Waiting for acknowledgment for next student: " + 
+
+        System.out.println("⏳ Waiting for acknowledgment for next student: " +
                 (state.currentIndex + 1) + "/" + students.size());
+    }
+
+    private void processGpsLocationMessage(String message, PrintWriter out) {
+        try {
+            System.out.println("📍 Processing GPS location message: " + message);
+
+            // Extract GPS data from format: 1005BNG0000001AC1F0002RT7F0001LAT12.345678LON78.901234GPSAAAA
+            String deviceId = extractDeviceIdFromGpsMessage(message);
+            String schoolId = extractSchoolIdFromGpsMessage(message);
+            String routeId = extractRouteIdFromGpsMessage(message);
+            Double latitude = extractLatitudeFromGpsMessage(message);
+            Double longitude = extractLongitudeFromGpsMessage(message);
+
+            System.out.println("📍 Extracted GPS data - Device: " + deviceId +
+                    ", School: " + schoolId +
+                    ", Route: " + routeId +
+                    ", Lat: " + latitude +
+                    ", Lon: " + longitude);
+
+            if (deviceId == null || schoolId == null || routeId == null ||
+                    latitude == null || longitude == null) {
+                System.err.println("❌ Invalid GPS location message format: " + message);
+                return;
+            }
+
+            // Send GPS location to frontend via WebSocket
+            sendGpsLocationToFrontend(deviceId, schoolId, routeId, latitude, longitude);
+
+            // Send acknowledgment back to C++ client
+            String ackResponse = "1005" + deviceId + schoolId + routeId + "ACKGPSAAAA";
+            out.println(ackResponse);
+            System.out.println("📤 Sent GPS acknowledgment: " + ackResponse);
+
+        } catch (Exception e) {
+            System.err.println("❌ Error processing GPS location message: " + message + " - " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    private String extractDeviceIdFromGpsMessage(String message) {
+        try {
+            // Remove prefix (1005) and suffix (GPSAAAA)
+            String content = message.substring(GPS_LOCATION_PREFIX.length(),
+                    message.length() - GPS_LOCATION_SUFFIX.length());
+
+            // Extract device ID (first 10 characters after 1005)
+            if (content.length() >= 10) {
+                String deviceId = content.substring(0, 10);
+                System.out.println("🔍 Extracted device ID from GPS message: '" + deviceId + "'");
+                return deviceId;
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Error extracting device ID from GPS message: " + e.getMessage());
+        }
+        return null;
+    }
+
+    private String extractSchoolIdFromGpsMessage(String message) {
+        try {
+            // Remove prefix (1005) and suffix (GPSAAAA)
+            String content = message.substring(GPS_LOCATION_PREFIX.length(),
+                    message.length() - GPS_LOCATION_SUFFIX.length());
+
+            // Device ID is 10 characters, so school ID starts at position 10
+            if (content.length() >= 18) {
+                // School ID is 8 characters (positions 10-18)
+                String schoolId = content.substring(10, 18);
+                System.out.println("🔍 Extracted school ID from GPS message: '" + schoolId + "'");
+                return schoolId;
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Error extracting school ID from GPS message: " + e.getMessage());
+        }
+        return null;
+    }
+
+    private String extractRouteIdFromGpsMessage(String message) {
+        try {
+            // Remove prefix (1005) and suffix (GPSAAAA)
+            String content = message.substring(GPS_LOCATION_PREFIX.length(),
+                    message.length() - GPS_LOCATION_SUFFIX.length());
+
+            // Device ID is 10 characters, School ID is 8 characters, so Route ID starts at position 18
+            if (content.length() >= 26) {
+                // Route ID is 8 characters (positions 18-26)
+                String routeId = content.substring(18, 26);
+                System.out.println("🔍 Extracted route ID from GPS message: '" + routeId + "'");
+                return routeId;
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Error extracting route ID from GPS message: " + e.getMessage());
+        }
+        return null;
+    }
+
+    private Double extractLatitudeFromGpsMessage(String message) {
+        try {
+            // Remove prefix (1005) and suffix (GPSAAAA)
+            String content = message.substring(GPS_LOCATION_PREFIX.length(),
+                    message.length() - GPS_LOCATION_SUFFIX.length());
+
+            // Look for LAT pattern after route ID (positions 26+)
+            if (content.length() >= 30) {
+                int latStart = content.indexOf("LAT", 26);
+                if (latStart != -1) {
+                    int latEnd = content.indexOf("LON", latStart);
+                    if (latEnd != -1) {
+                        String latStr = content.substring(latStart + 3, latEnd);
+                        Double latitude = Double.parseDouble(latStr);
+                        System.out.println("🔍 Extracted latitude from GPS message: '" + latitude + "'");
+                        return latitude;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Error extracting latitude from GPS message: " + e.getMessage());
+        }
+        return null;
+    }
+
+    private Double extractLongitudeFromGpsMessage(String message) {
+        try {
+            // Remove prefix (1005) and suffix (GPSAAAA)
+            String content = message.substring(GPS_LOCATION_PREFIX.length(),
+                    message.length() - GPS_LOCATION_SUFFIX.length());
+
+            // Look for LON pattern after latitude
+            if (content.length() >= 30) {
+                int lonStart = content.indexOf("LON");
+                if (lonStart != -1) {
+                    String lonStr = content.substring(lonStart + 3);
+                    Double longitude = Double.parseDouble(lonStr);
+                    System.out.println("🔍 Extracted longitude from GPS message: '" + longitude + "'");
+                    return longitude;
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Error extracting longitude from GPS message: " + e.getMessage());
+        }
+        return null;
+    }
+
+    private void sendGpsLocationToFrontend(String deviceId, String schoolId, String routeId,
+                                           Double latitude, Double longitude) {
+        try {
+            // Create GPS location data for frontend
+            Map<String, Object> gpsData = new HashMap<>();
+            gpsData.put("deviceId", deviceId);
+            gpsData.put("schoolId", schoolId);
+            gpsData.put("routeId", routeId);
+            gpsData.put("latitude", latitude);
+            gpsData.put("longitude", longitude);
+            gpsData.put("timestamp", LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+            gpsData.put("type", "gps_location");
+
+            // Convert to JSON
+            ObjectMapper objectMapper = new ObjectMapper();
+            String jsonData = objectMapper.writeValueAsString(gpsData);
+
+            // Send to general GPS topic
+            simpMessagingTemplate.convertAndSend("/topic/gps-updates", jsonData);
+
+            // Send to specific school and route topic
+            String schoolRouteTopic = "/topic/gps/" + schoolId + "/" + routeId;
+            simpMessagingTemplate.convertAndSend(schoolRouteTopic, jsonData);
+
+            System.out.println("📡 Sent GPS location to frontend - Device: " + deviceId +
+                    ", School: " + schoolId + ", Route: " + routeId +
+                    ", Coordinates: " + latitude + ", " + longitude);
+            System.out.println("📡 Topics: /topic/gps-updates and " + schoolRouteTopic);
+
+        } catch (Exception e) {
+            System.err.println("❌ Error sending GPS location to frontend: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 }
