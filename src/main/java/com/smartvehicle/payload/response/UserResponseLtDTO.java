@@ -11,7 +11,7 @@ import lombok.Setter;
 @NoArgsConstructor
 public class UserResponseLtDTO {
     private Long id;
-    private String userName;
+    private String username;
     private String phone;
     private String status;
 }

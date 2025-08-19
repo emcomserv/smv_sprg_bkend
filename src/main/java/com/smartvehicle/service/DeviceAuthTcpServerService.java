@@ -59,6 +59,8 @@ public class DeviceAuthTcpServerService {
     private DeviceRepository deviceRepository;
     @Autowired
     private SimpMessagingTemplate simpMessagingTemplate;
+    @Autowired
+    private NotificationService notificationService;
 
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
 
@@ -670,12 +672,63 @@ public class DeviceAuthTcpServerService {
 
             // 9. Map Python response to our format
             String responseCode = mapPythonResponseToCode(pythonResponse);
+
+            // 10. Persist result+confidence in reserv column for the latest swipe record
+            int confidence = extractConfidencePercentage(pythonResponse);
+            String reservValue = buildReservValue(responseCode, confidence);
+            try {
+                latestSwipe.setReserv(reservValue);
+                swipeStudentDeviceRepository.save(latestSwipe);
+                System.out.println("💾 Updated reserv for student " + studentId + " to '" + reservValue + "'");
+            } catch (Exception e) {
+                System.err.println("❌ Failed to update reserv for student " + studentId + ": " + e.getMessage());
+            }
+
+            // 11. Notify parent based on result
+            if ("00".equals(responseCode)) {
+                notifyParentOfSuccessfulSwipe(studentId, schoolId, routeId, confidence);
+            } else {
+                notifyParentOfFailedSwipe(studentId, schoolId, routeId, responseCode, confidence);
+            }
+
             return buildSwipeCardResponse(schoolId, routeId, studentId, responseCode);
 
         } catch (Exception e) {
             System.err.println("❌ Error processing swipe card request: " + request + " - " + e.getMessage());
             e.printStackTrace();
             return buildSwipeCardResponse(null, null, null, "06");
+        }
+    }
+
+    private void notifyParentOfSuccessfulSwipe(String smStudentId, String schoolId, String routeId, int confidencePct) {
+        try {
+            Optional<String> tokenOpt = studentRepository.findParentDeviceTokenBySmStudentId(smStudentId);
+            if (tokenOpt.isEmpty() || tokenOpt.get() == null || tokenOpt.get().isBlank()) {
+                System.out.println("ℹ️ No parent device token found for student " + smStudentId);
+                return;
+            }
+            String token = tokenOpt.get();
+            String title = "Notification";
+            String body = "your child has boarded the bus";
+            notificationService.sendNotification(token, title, body);
+        } catch (Exception e) {
+            System.err.println("❌ Failed to send parent notification for student " + smStudentId + ": " + e.getMessage());
+        }
+    }
+
+    private void notifyParentOfFailedSwipe(String smStudentId, String schoolId, String routeId, String resultCode, int confidencePct) {
+        try {
+            Optional<String> tokenOpt = studentRepository.findParentDeviceTokenBySmStudentId(smStudentId);
+            if (tokenOpt.isEmpty() || tokenOpt.get() == null || tokenOpt.get().isBlank()) {
+                System.out.println("ℹ️ No parent device token found for student " + smStudentId);
+                return;
+            }
+            String token = tokenOpt.get();
+            String title = "Notification";
+            String body = "your child image not matched";
+            notificationService.sendNotification(token, title, body);
+        } catch (Exception e) {
+            System.err.println("❌ Failed to send failure notification for student " + smStudentId + ": " + e.getMessage());
         }
     }
 
@@ -896,13 +949,12 @@ public class DeviceAuthTcpServerService {
                 out.println(jsonPayload);
                 System.out.println("📤 Sent FTP path to Python server: " + ftpPath);
 
-                // Read response from Python server (expects codes like 00,01,...)
+                // Read response from Python server (expects code and optionally confidence e.g. "00,78.85")
                 String pythonResponse = in.readLine();
                 if (pythonResponse != null) {
                     System.out.println("📥 Python server response: " + pythonResponse);
-                    // Extract leading code before comma if payload contains extra data
-                    String code = pythonResponse.split(",")[0].trim();
-                    return code;
+                    // Return raw response so downstream can parse both result and confidence
+                    return pythonResponse.trim();
                 }
             } catch (IOException e) {
                 System.err.println("❌ Failed to send FTP path to Python server: " + e.getMessage());
@@ -918,12 +970,12 @@ public class DeviceAuthTcpServerService {
             return "07"; // Python connection failed
         }
 
-        String normalized = pythonResponse.trim();
-        if (normalized.length() > 2) {
-            normalized = normalized.substring(0, 2);
+        String extracted = extractResultCode(pythonResponse);
+        if (extracted == null) {
+            return "06"; // Unknown format
         }
 
-        switch (normalized) {
+        switch (extracted) {
             case "00": return "00"; // successful
             case "01": return "01"; // Image not matched confidence not enough
             case "02": return "02"; // error student id not found
@@ -933,6 +985,72 @@ public class DeviceAuthTcpServerService {
             case "07": return "07"; // Python connection failed
             default: return "06";   // other failure response
         }
+    }
+
+    /**
+     * Extracts the two-digit result code (00..07) from the Python response, regardless of position.
+     */
+    private String extractResultCode(String pythonResponse) {
+        if (pythonResponse == null) return null;
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("(^|\\D)(0[0-7])(?![0-9])")
+                .matcher(pythonResponse);
+        if (m.find()) {
+            return m.group(2);
+        }
+        return null;
+    }
+
+    /**
+     * Extracts confidence percentage from Python response.
+     * Accepts formats like "00,78.85" or tokens containing a numeric percentage.
+     * Returns an integer clamped to [0, 99].
+     */
+    private int extractConfidencePercentage(String pythonResponse) {
+        if (pythonResponse == null) {
+            return 0;
+        }
+        try {
+            // 1) Try explicit label: confidence:XX or confidence=XX
+            java.util.regex.Matcher labeled = java.util.regex.Pattern
+                    .compile("(?i)confidence\\s*[:=]\\s*([0-9]+(?:\\.[0-9]+)?)")
+                    .matcher(pythonResponse);
+            if (labeled.find()) {
+                double val = Double.parseDouble(labeled.group(1));
+                return clampToTwoDigits(val);
+            }
+
+            // 2) Try format: "RR,XX.xx" or "RR XX.xx" (confidence immediately follows 2-digit result code)
+            java.util.regex.Matcher immediate = java.util.regex.Pattern
+                    .compile("^\\s*([0-9]{2})[ ,]+([0-9]+(?:\\.[0-9]+)?)")
+                    .matcher(pythonResponse.trim());
+            if (immediate.find()) {
+                double val = Double.parseDouble(immediate.group(2));
+                return clampToTwoDigits(val);
+            }
+
+            // Otherwise, treat as no confidence provided
+        } catch (Exception ignored) {
+        }
+        return 0;
+    }
+
+    private int clampToTwoDigits(double value) {
+        int rounded = (int) Math.round(value);
+        if (rounded < 0) rounded = 0;
+        if (rounded > 99) rounded = 99;
+        return rounded;
+    }
+
+    /**
+     * Builds reserv value as requested: first two chars = result code, next two = confidence, then 'AAA'.
+     * Example: result=00, confidence=78 -> "0078AAA"
+     */
+    private String buildReservValue(String resultCode, int confidencePercentage) {
+        String code = (resultCode != null && resultCode.length() >= 2) ? resultCode.substring(0, 2) : "06";
+        int clamped = Math.max(0, Math.min(99, confidencePercentage));
+        String confidenceTwoDigits = String.format("%02d", clamped);
+        return code + confidenceTwoDigits + "AAA";
     }
 
     // Helper class to hold device information

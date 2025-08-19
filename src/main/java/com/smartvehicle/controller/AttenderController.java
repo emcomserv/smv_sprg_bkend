@@ -20,6 +20,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Optional;
+import com.smartvehicle.repository.StudentRepository;
+import com.smartvehicle.payload.response.StudentIdListResponse;
 
 
 @RestController
@@ -37,6 +39,8 @@ public class AttenderController {
     private AttenderMapper attenderMapper;
     @Autowired
     UserRepository userRepository;
+    @Autowired
+    private StudentRepository studentRepository;
 
     @PostMapping("/register")
     public ResponseEntity<?> registerUser(@Valid @RequestBody AttenderSignupReq request) throws Exception{
@@ -66,7 +70,7 @@ public class AttenderController {
      */
     @GetMapping
     public ResponseEntity<List<AttenderResponseDTO>> getAllAttenders() {
-        List<Attender> attenders = attenderRepository.findAll();
+        List<Attender> attenders = attenderRepository.findAllWithRelationships();
         List<AttenderResponseDTO> attenderResponseDTOS = attenderMapper.toResponseDTO(attenders);
         return ResponseEntity.ok(attenderResponseDTOS);
     }
@@ -85,10 +89,20 @@ public class AttenderController {
 
     @GetMapping("/{id}")
     public ResponseEntity<AttenderResponseDTO> getById(@PathVariable Long id) {
-        Attender attender = attenderRepository.findById(id)
+        Attender attender = attenderRepository.findByIdWithRelationships(id)
                 .orElseThrow(() -> new RuntimeException("Error: Attender not found with id  "+id));
         AttenderResponseDTO attenderResponseDTO = attenderMapper.toResponseDTO(attender);
         return ResponseEntity.ok(attenderResponseDTO);
+    }
+
+    // Returns ["ST6F0001","ST6F0004",...]
+    @GetMapping("/students")
+    public ResponseEntity<StudentIdListResponse> getStudentsBySchoolAndSmRoute(
+            @RequestParam("schoolId") String schoolId,
+            @RequestParam("smRouteId") String smRouteId) {
+        List<String> ids = studentRepository.findSmStudentIdsBySchoolIdAndSmRouteId(schoolId, smRouteId);
+        String count = String.format("%02d", ids.size());
+        return ResponseEntity.ok(new StudentIdListResponse(count, ids));
     }
 
     @PutMapping("/update/{id}")

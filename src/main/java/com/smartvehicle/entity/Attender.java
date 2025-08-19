@@ -28,7 +28,7 @@ public class Attender extends BaseEntity{
     private User user;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "route_id", referencedColumnName = "sm_route_id")
+    @JoinColumn(name = "route_id", referencedColumnName = "id")
     private Route route;
     @Column(name = "sm_attender_id", length = 20)
     private String smAttenderId;
