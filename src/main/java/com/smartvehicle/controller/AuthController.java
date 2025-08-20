@@ -140,6 +140,9 @@ public class AuthController {
                         entityObj.setId(admin.getId());
                         entityObj.setFirstName(admin.getFirstName());
                         entityObj.setLastName(admin.getLastName());
+                        if (admin.getSchool() != null) {
+                            entityObj.setSchoolId(admin.getSchool().getId());
+                        }
                         break;
                     default:
                         break;

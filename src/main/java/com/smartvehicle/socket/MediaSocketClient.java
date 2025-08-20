@@ -46,10 +46,15 @@ public class MediaSocketClient {
                                                List<String> formats, List<String> filePaths,
                                                List<String> vehNums, List<Integer> detectTypes,
                                                List<String> reserves) throws IOException {
-        if (filePaths == null || filePaths.size() != 4 || formats == null || formats.size() != 4 ||
-                vehNums == null || vehNums.size() != 4 || detectTypes == null || detectTypes.size() != 4 ||
-                reserves == null || reserves.size() != 4) {
-            throw new IllegalArgumentException("Exactly 4 file paths and corresponding metadata must be provided.");
+        if (filePaths == null || formats == null || vehNums == null || detectTypes == null || reserves == null) {
+            throw new IllegalArgumentException("File paths and metadata lists must not be null.");
+        }
+        int count = filePaths.size();
+        if (count < 1 || count > 4) {
+            throw new IllegalArgumentException("You can upload between 1 and 4 files.");
+        }
+        if (formats.size() != count || vehNums.size() != count || detectTypes.size() != count || reserves.size() != count) {
+            throw new IllegalArgumentException("All metadata lists must have the same length as file paths: " + count);
         }
 
         try (Socket socket = new Socket()) {
@@ -61,7 +66,7 @@ public class MediaSocketClient {
                 long startTime = System.currentTimeMillis();
 
                 // Send number of files
-                dos.writeInt(4);
+                dos.writeInt(count);
 
                 // Send common metadata
                 dos.writeUTF(id.toString());
@@ -69,7 +74,7 @@ public class MediaSocketClient {
                 dos.writeUTF(studentId != null ? studentId : "");
 
                 // Send metadata for each file
-                for (int i = 0; i < 4; i++) {
+                for (int i = 0; i < count; i++) {
                     log.info("Sending file {}: {}", i + 1, filePaths.get(i));
                     dos.writeUTF(formats.get(i) != null ? formats.get(i) : "");
                     dos.writeUTF(filePaths.get(i) != null ? filePaths.get(i) : "");

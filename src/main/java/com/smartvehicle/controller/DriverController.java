@@ -79,6 +79,14 @@ public class DriverController {
         return ResponseEntity.ok(driverResponseDTOS);
     }
 
+    // Get drivers by school id
+    @GetMapping("/school/{schoolId}")
+    public ResponseEntity<List<DriverResponseDTO>> getDriversBySchool(@PathVariable String schoolId) {
+        List<Driver> drivers = driverRepository.findAllBySchool_Id(schoolId);
+        List<DriverResponseDTO> driverResponseDTOS = driverMapper.toResponseDTO(drivers);
+        return ResponseEntity.ok(driverResponseDTOS);
+    }
+
     /**
      * Get a route by ID
      */

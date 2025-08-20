@@ -221,10 +221,15 @@ public class FTPClientService {
     }
 
     public boolean uploadFile(String remotePath, InputStream inputStream) throws IOException {
-        // Check if file already exists before uploading
+        // Check if file already exists before uploading; if exists, delete so we overwrite with the new file
         if (fileExists(remotePath)) {
-            log.info(Instant.now() + " - File {} already exists on FTP server, skipping upload", remotePath);
-            return true;
+            log.info(Instant.now() + " - File {} already exists on FTP server, deleting to overwrite", remotePath);
+            try {
+                boolean deleted = deleteRemoteFile(remotePath);
+                log.info(Instant.now() + " - Delete existing file {}: {}", remotePath, deleted ? "success" : "failed");
+            } catch (Exception e) {
+                log.warn(Instant.now() + " - Failed to delete existing file {} before overwrite: {}", remotePath, e.getMessage());
+            }
         }
 
         int retryCount = 0;
@@ -347,6 +352,27 @@ public class FTPClientService {
         }
         log.error(Instant.now() + " - Failed to upload file after {} attempts: {}", MAX_RETRIES, remotePath);
         return false;
+    }
+
+    private boolean deleteRemoteFile(String remotePath) {
+        try {
+            String directory = remotePath.substring(0, remotePath.lastIndexOf('/'));
+            String filename = remotePath.substring(remotePath.lastIndexOf('/') + 1);
+            if (!ftpClient.isConnected() || !ftpClient.sendNoOp()) {
+                init();
+            }
+            boolean cwd = ftpClient.changeWorkingDirectory(directory);
+            if (!cwd) {
+                log.warn(Instant.now() + " - Cannot change directory to {} for delete", directory);
+                return false;
+            }
+            boolean deleted = ftpClient.deleteFile(filename);
+            log.debug(Instant.now() + " - deleteFile reply: {}", ftpClient.getReplyString());
+            return deleted;
+        } catch (Exception e) {
+            log.warn(Instant.now() + " - Error deleting remote file {}: {}", remotePath, e.getMessage());
+            return false;
+        }
     }
 
     // Helper method to check if file exists on FTP server

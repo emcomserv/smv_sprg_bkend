@@ -1,6 +1,7 @@
 package com.smartvehicle.controller;
 
 import com.smartvehicle.entity.Route;
+import com.smartvehicle.entity.Driver;
 import com.smartvehicle.entity.RoutePoint;
 import com.smartvehicle.mapper.RouteMapper;
 import com.smartvehicle.mapper.RoutePointMapper;
@@ -79,6 +80,14 @@ public class RouteController {
     @GetMapping("/admin/{adminId}")
     public ResponseEntity<?> getRoutesByAdminId(@PathVariable Long adminId) {
         List<Route> routes = routeService.getRoutesByAdminId(adminId);
+        List<RouteResponseDTO> routeResponseDTOS = routeMapper.toResponseDTO(routes);
+        return ResponseEntity.ok(routeResponseDTOS);
+    }
+
+    // Get routes by driver smDriverId
+    @GetMapping("/driver/smid/{smDriverId}")
+    public ResponseEntity<List<RouteResponseDTO>> getRoutesByDriverSmId(@PathVariable String smDriverId) {
+        List<Route> routes = routeService.getRoutesByDriverSmId(smDriverId);
         List<RouteResponseDTO> routeResponseDTOS = routeMapper.toResponseDTO(routes);
         return ResponseEntity.ok(routeResponseDTOS);
     }

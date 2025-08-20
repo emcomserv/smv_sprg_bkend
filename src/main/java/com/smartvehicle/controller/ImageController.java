@@ -2,9 +2,11 @@ package com.smartvehicle.controller;
 
 import com.smartvehicle.payload.response.ImageResponseDTO;
 import com.smartvehicle.entity.Image;
+import com.smartvehicle.entity.Student;
 import com.smartvehicle.service.FTPClientService;
 import com.smartvehicle.service.ImageService;
 import com.smartvehicle.socket.MediaSocketClient;
+import com.smartvehicle.repository.StudentRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,7 +21,7 @@ import java.util.List;
 import java.util.Optional;
 
 @RestController
-@RequestMapping("/api/images")
+@RequestMapping("/api/v1/images")
 public class ImageController {
 
     @Autowired
@@ -27,6 +29,8 @@ public class ImageController {
 
     @Autowired
     private FTPClientService ftpService;
+    @Autowired
+    private StudentRepository studentRepository;
 
     private static final String DEFAULT_SUBDIR = "Default";
     private static final int REQUIRED_FILE_COUNT = 4;
@@ -35,6 +39,7 @@ public class ImageController {
     public ResponseEntity<String> uploadImages(
             @RequestParam String schoolId,
             @RequestParam String studentId,
+            @RequestParam String routeId,
             @RequestParam("file") MultipartFile[] files,
             @RequestParam(required = false) String command,
             @RequestParam(required = false) String devId,
@@ -45,18 +50,19 @@ public class ImageController {
         if (files == null || files.length == 0) {
             return ResponseEntity.badRequest().body("No files provided");
         }
-        if (files.length != REQUIRED_FILE_COUNT) {
-            return ResponseEntity.badRequest().body("Exactly " + REQUIRED_FILE_COUNT + " files must be provided");
+        if (files.length < 1 || files.length > 4) {
+            return ResponseEntity.badRequest().body("You can upload between 1 and 4 files");
         }
 
         StringBuilder resultMessage = new StringBuilder();
 
         try {
-            // Construct the remote path dynamically using provided schoolId and studentId
-            String basePath = "/upload".endsWith("/") ? "/upload" : "/upload" + "/";
-            String schoolPath = basePath + schoolId;  // e.g., /upload/AC0F0016
-            String studentPath = schoolPath + "/" + studentId;  // e.g., /upload/AC0F0016/ST0F0001
-            String finalPath = studentPath + "/" + DEFAULT_SUBDIR;  // e.g., /upload/AC0F0016/ST0F0001/Default
+            // Construct the remote path dynamically using provided schoolId, routeId and studentId
+            String basePath = "/upload";
+            String schoolPath = basePath + "/" + schoolId;                 // e.g., /upload/AC0F0016
+            String routePath = schoolPath + "/" + routeId;                  // e.g., /upload/AC0F0016/RT7F0001
+            String studentPath = routePath + "/" + studentId;               // e.g., /upload/AC0F0016/RT7F0001/ST0F0001
+            String finalPath = studentPath + "/" + DEFAULT_SUBDIR;          // e.g., /upload/AC0F0016/RT7F0001/ST0F0001/default
 
             // Create directories on FTP if they don't exist
             try {
@@ -68,6 +74,16 @@ public class ImageController {
                     return ResponseEntity.status(500).body(resultMessage.toString());
                 }
                 System.out.println(Instant.now() + " - Successfully created/accessed directory: " + schoolPath);
+                Thread.sleep(2000); // Add 2-second delay
+
+                boolean routeDirCreated = ftpService.createDirectory(routePath);
+                if (!routeDirCreated) {
+                    String errorMsg = "Failed to create or access directory: " + routePath + ". Check FTP permissions and server logs for details.\n";
+                    resultMessage.append(errorMsg);
+                    System.out.println(Instant.now() + " - " + errorMsg);
+                    return ResponseEntity.status(500).body(resultMessage.toString());
+                }
+                System.out.println(Instant.now() + " - Successfully created/accessed directory: " + routePath);
                 Thread.sleep(2000); // Add 2-second delay
 
                 boolean studentDirCreated = ftpService.createDirectory(studentPath);
@@ -167,7 +183,8 @@ public class ImageController {
                     resultMessage.append("Failed to send file paths to Python server: ").append(e.getMessage()).append("\n");
                 }
             } else {
-                resultMessage.append("Not sending to Python server due to incomplete uploads.\n");
+                resultMessage.append("Some files failed to upload to FTP. Uploaded: ")
+                        .append(filePaths.size()).append("/").append(files.length).append(".\n");
             }
 
         } catch (Exception e) {
@@ -240,6 +257,7 @@ public class ImageController {
         Image image = optionalImage.get();
         try {
             // Reconstruct ftpPath since it's not stored in the database
+            // If you have routeId available for stored images, include it; otherwise this remains legacy
             String ftpFilePath = String.format("/upload/%s/%s/Default/%s_%s_img1.%s",
                     image.getSchoolId(), image.getStudentId(), image.getSchoolId(), image.getStudentId(), image.getFormat());
             System.out.println(Instant.now() + " - Sending file path to Python server: " + ftpFilePath);
@@ -265,6 +283,7 @@ public class ImageController {
             List<String> ftpPaths = new ArrayList<>();
             for (ImageResponseDTO image : images) {
                 // Reconstruct ftpPath since it's not stored in the database
+                // If routeId is tracked per image, insert it between schoolId and studentId in the path
                 String ftpFilePath = String.format("/upload/%s/%s/Default/%s_%s_img%d.%s",
                         image.getSchoolId(), image.getStudentId(), image.getSchoolId(), image.getStudentId(),
                         images.indexOf(image) + 1, image.getFormat());

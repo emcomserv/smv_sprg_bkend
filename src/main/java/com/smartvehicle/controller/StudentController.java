@@ -120,6 +120,14 @@ public class StudentController {
         return ResponseEntity.ok(studentResponseDTOS);
     }
 
+    // New: fetch students by external route ID (smRouteId), e.g. RT7F0001
+    @GetMapping("/route/smid/{smRouteId}")
+    public ResponseEntity<List<StudentResponseDTO>> getBySmRouteId(@PathVariable String smRouteId) {
+        List<Student> students = studentRepository.findAllByRoute_SmRouteId(smRouteId);
+        List<StudentResponseDTO> studentResponseDTOS = studentMapper.toResponseDTO(students);
+        return ResponseEntity.ok(studentResponseDTOS);
+    }
+
     @GetMapping("/route-point/{id}")
     public ResponseEntity<List<StudentResponseLtDTO>> getAllStudentByRoutePointId(@PathVariable Long id) {
         List<Student> students = studentRepository.findAllByRoutePoint_Id(id);

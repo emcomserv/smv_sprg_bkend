@@ -1,6 +1,7 @@
 package com.smartvehicle.service;
 
 import com.smartvehicle.entity.PassengerInfo;
+import com.smartvehicle.entity.Driver;
 import com.smartvehicle.entity.Route;
 import com.smartvehicle.entity.RoutePoint;
 import com.smartvehicle.entity.School;
@@ -11,6 +12,7 @@ import com.smartvehicle.payload.response.PassengerInfoDTO;
 import com.smartvehicle.payload.response.PassengerInfoResponse;
 import com.smartvehicle.payload.response.RouteRegResDTO;
 import com.smartvehicle.repository.PassengerInfoRepository;
+import com.smartvehicle.repository.DriverRepository;
 import com.smartvehicle.repository.RoutePointRepository;
 import com.smartvehicle.repository.RouteRepository;
 import com.smartvehicle.repository.SchoolRepository;
@@ -34,6 +36,8 @@ public class RouteService {
     private RoutePointRepository routePointRepository;
     @Autowired
     private PassengerInfoRepository passengerInfoRepository;
+    @Autowired
+    private DriverRepository driverRepository;
     @Autowired
     private PassengerInfoMapper passengerInfoMapper;
     @Autowired
@@ -84,6 +88,10 @@ public class RouteService {
     }
     public List<Route> getRoutesBySchoolId(String schoolId) {
         return routeRepository.findRouteBySchoolId(schoolId);
+    }
+
+    public List<Route> getRoutesByDriverSmId(String smDriverId) {
+        return routeRepository.findRoutesByDriverSmId(smDriverId);
     }
 
     public List<Route> getRoutesBySMAdminId(String smAdminId) {
