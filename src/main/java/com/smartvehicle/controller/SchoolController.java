@@ -14,11 +14,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.core.Authentication;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 
@@ -96,6 +98,19 @@ public class SchoolController {
             schoolResponseDTOS= schools.stream()
                     .map(s-> schoolMapper.toResponseDTO(s)).collect(Collectors.toList());
 
+        return ResponseEntity.ok(schoolResponseDTOS);
+    }
+
+    @GetMapping("/mine")
+    public ResponseEntity<?> getSchoolsForCurrentSuperAdmin(Authentication authentication) {
+        List<SchoolResponseDTO> schoolResponseDTOS=new ArrayList<>();
+        if (authentication == null || !(authentication.getDetails() instanceof Map)) {
+            throw new RuntimeException("Unauthorised User");
+        }
+        Map<String, Object> details = (Map<String, Object>) authentication.getDetails();
+        Long userId = (Long) details.get("userId");
+        List<School> schools = schoolRepository.findByCreatedBy(userId);
+        schoolResponseDTOS= schools.stream().map(s-> schoolMapper.toResponseDTO(s)).collect(Collectors.toList());
         return ResponseEntity.ok(schoolResponseDTOS);
     }
 

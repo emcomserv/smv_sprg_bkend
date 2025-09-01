@@ -17,4 +17,6 @@ public interface SchoolRepository extends JpaRepository<School, String> {
                     "WHERE a.id=?1 ",
             nativeQuery = true)
     List<School> findByAdmin_Id(Long adminId);
+
+    List<School> findByCreatedBy(Long createdBy);
 }

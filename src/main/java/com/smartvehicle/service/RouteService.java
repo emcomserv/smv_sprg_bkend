@@ -44,9 +44,6 @@ public class RouteService {
     private SchoolRepository schoolRepository;
     @Transactional
     public RouteRegResDTO registerRoute(RouteRegistrationReq request) {
-        if (routeRepository.existsByRouteName(request.getRouteName())) {
-            throw new RuntimeException("Error: A route with this name already exists.");
-        }
         // Find the school by ID
         School school = schoolRepository.findById(request.getSchoolId())
                 .orElseThrow(() -> new RuntimeException("Error: School not found with ID " + request.getSchoolId()));

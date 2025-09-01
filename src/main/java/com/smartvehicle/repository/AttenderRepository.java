@@ -34,5 +34,5 @@ public interface AttenderRepository extends JpaRepository<Attender, Long> {
             "LEFT JOIN FETCH a.user")
     List<Attender> findAllWithRelationships();
 
-
+    List<Attender> findBySchool_IdIn(List<String> schoolIds);
 }

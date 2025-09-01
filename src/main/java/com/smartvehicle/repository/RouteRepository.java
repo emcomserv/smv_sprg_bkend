@@ -49,4 +49,6 @@ public interface RouteRepository extends JpaRepository<Route,Long> {
     // Fetch routes by driver's smDriverId with school eagerly loaded
     @Query("select r from Driver d join d.route r join fetch r.school where d.smDriverId = ?1")
     List<Route> findRoutesByDriverSmId(String smDriverId);
+
+    List<Route> findBySchool_IdIn(List<String> schoolIds);
 }

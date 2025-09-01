@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.net.ftp.FTP;
 import org.apache.commons.net.ftp.FTPClient;
 import org.apache.commons.net.ftp.FTPConnectionClosedException;
+import org.apache.commons.net.ftp.FTPFile;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -136,6 +137,42 @@ public class FTPClientService {
             }
         }
         throw new IOException("Failed to read file after " + MAX_RETRIES + " attempts.");
+    }
+
+    /**
+     * Lists file names in a directory relative to the configured remoteDir.
+     * Example: if remoteDir=/upload, pass "AC1F0002/RT7F0001/ST6F0001/Default".
+     */
+    public List<String> listFilesInDirectory(String relativeDirectoryPath) throws IOException {
+        String normalizedPath = relativeDirectoryPath == null ? "" : relativeDirectoryPath.trim();
+        if (normalizedPath.startsWith("/")) {
+            normalizedPath = normalizedPath.substring(1);
+        }
+        String remoteDirectory = (remoteDir == null ? "" : remoteDir.trim());
+        if (remoteDirectory.endsWith("/")) {
+            remoteDirectory = remoteDirectory.substring(0, remoteDirectory.length() - 1);
+        }
+        String fullPath = remoteDirectory + "/" + normalizedPath;
+
+        try {
+            if (!ftpClient.isConnected() || !ftpClient.sendNoOp()) {
+                init();
+            }
+        } catch (IOException e) {
+            init();
+        }
+
+        FTPFile[] files = ftpClient.listFiles(fullPath);
+        if (files == null) {
+            return List.of();
+        }
+        java.util.ArrayList<String> names = new java.util.ArrayList<>();
+        for (FTPFile file : files) {
+            if (file != null && file.isFile()) {
+                names.add(file.getName());
+            }
+        }
+        return names;
     }
 
     public boolean createDirectory(String dirPath) throws IOException {

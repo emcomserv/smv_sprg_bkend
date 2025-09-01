@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Optional;
 import com.smartvehicle.repository.StudentRepository;
 import com.smartvehicle.payload.response.StudentIdListResponse;
+import com.smartvehicle.service.FTPClientService;
 
 
 @RestController
@@ -41,6 +42,8 @@ public class AttenderController {
     UserRepository userRepository;
     @Autowired
     private StudentRepository studentRepository;
+    @Autowired
+    private FTPClientService ftpClientService;
 
     @PostMapping("/register")
     public ResponseEntity<?> registerUser(@Valid @RequestBody AttenderSignupReq request) throws Exception{
@@ -102,7 +105,31 @@ public class AttenderController {
             @RequestParam("smRouteId") String smRouteId) {
         List<String> ids = studentRepository.findSmStudentIdsBySchoolIdAndSmRouteId(schoolId, smRouteId);
         String count = String.format("%02d", ids.size());
-        return ResponseEntity.ok(new StudentIdListResponse(count, ids));
+
+        java.util.Map<String, String> imagesBase64 = new java.util.HashMap<>();
+        for (String studentId : ids) {
+            try {
+                String dir = schoolId + "/" + smRouteId + "/" + studentId + "/Default";
+                List<String> files = ftpClientService.listFilesInDirectory(dir);
+                // Pick the first jpg/jpeg/png file if present
+                String selected = null;
+                for (String f : files) {
+                    String lower = f.toLowerCase();
+                    if (lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png")) {
+                        selected = f;
+                        break;
+                    }
+                }
+                if (selected != null) {
+                    String relativePath = dir + "/" + selected;
+                    byte[] data = ftpClientService.readFile(relativePath);
+                    String b64 = java.util.Base64.getEncoder().encodeToString(data);
+                    imagesBase64.put(studentId, b64);
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return ResponseEntity.ok(new StudentIdListResponse(count, ids, imagesBase64));
     }
 
     @PutMapping("/update/{id}")

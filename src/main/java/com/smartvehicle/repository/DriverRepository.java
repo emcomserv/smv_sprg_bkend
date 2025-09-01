@@ -16,4 +16,6 @@ public interface DriverRepository extends JpaRepository<Driver, Long> {
 
     // Fetch all drivers by school id
     List<Driver> findAllBySchool_Id(String schoolId);
+
+    List<Driver> findBySchool_IdIn(List<String> schoolIds);
 }

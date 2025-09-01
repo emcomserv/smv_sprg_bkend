@@ -7,6 +7,7 @@ import com.smartvehicle.mapper.StudentMapper;
 import com.smartvehicle.payload.request.StudentChangeRouteReq;
 import com.smartvehicle.payload.request.StudentPickupPointReq;
 import com.smartvehicle.payload.request.StudentSignupReq;
+import com.smartvehicle.payload.request.RecognitionResultRequest;
 import com.smartvehicle.payload.response.StudentResponseDTO;
 import com.smartvehicle.payload.response.StudentResponseLtDTO;
 import com.smartvehicle.repository.*;
@@ -139,7 +140,7 @@ public class StudentController {
     public ResponseEntity<StudentResponseDTO> changeRoutePoint(@PathVariable Long id,
                                                                @RequestBody StudentPickupPointReq req) {
         Student student = studentRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Error: Student not found with id  " + id));
+                        .orElseThrow(() -> new RuntimeException("Error: Student not found with id  " + id));
         student.setLatitude(req.getLatitude());
         student.setLongitude(req.getLongitude());
         studentRepository.save(student);
@@ -410,6 +411,113 @@ public class StudentController {
             swipeReportMobile.setLongitude(longitude);
             swipeReportMobile.setImageName(imageName);
             swipeReportMobileRepository.save(swipeReportMobile);
+        }
+
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/recognition")
+    public ResponseEntity<Map<String, Object>> recognitionResult(@Valid @RequestBody RecognitionResultRequest req) {
+        Map<String, Object> response = new HashMap<>();
+
+        // Parse input: SCHOOLID-ROUTEID-CITYCODESTUDENTID
+        if (req.getInput() == null || !req.getInput().matches("^[A-Za-z0-9]+-[A-Za-z0-9]+-[A-Za-z0-9]+$")) {
+            response.put("status", "Invalid");
+            response.put("message", "Invalid input format. Expected SCHOOLID-ROUTEID-CITYCODESTUDENTID");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+        String[] parts = req.getInput().toUpperCase().split("-");
+        String schoolId = parts[0];
+        String routeId = parts[1];
+        String cityAndStudent = parts[2];
+        if (cityAndStudent.length() <= 3) {
+            response.put("status", "Invalid");
+            response.put("message", "Invalid student ID segment in input");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+        String cityCode = cityAndStudent.substring(0, 3);
+        String studentId = cityAndStudent.substring(3);
+        req.setSchoolId(schoolId);
+        req.setRouteId(routeId);
+        req.setCityCode(cityCode);
+        req.setStudentId(studentId);
+
+        // Basic validations: school, route, student
+        boolean schoolExists = schoolRepository.existsById(schoolId);
+        if (!schoolExists) {
+            response.put("status", "Invalid");
+            response.put("message", "School not found with ID: " + schoolId);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+
+        Route route = routeRepository.findBySmRouteId(routeId).orElse(null);
+        if (route == null) {
+            response.put("status", "Invalid");
+            response.put("message", "Route not found with ID: " + routeId);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+        if (route.getSchool() == null || !schoolId.equals(route.getSchool().getId())) {
+            response.put("status", "Invalid");
+            response.put("message", "Route does not belong to the specified school");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+        if (route.getCityCode() == null || !cityCode.equalsIgnoreCase(route.getCityCode())) {
+            response.put("status", "Invalid");
+            response.put("message", "City code " + cityCode + " does not match the route's city code");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+
+        Student student = studentRepository.findBySmStudentId(studentId).orElse(null);
+        if (student == null) {
+            response.put("status", "Invalid");
+            response.put("message", "Student not found with ID: " + studentId);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+        if (student.getSchool() == null || !schoolId.equals(student.getSchool().getId())) {
+            response.put("status", "Invalid");
+            response.put("message", "Student does not belong to the specified school");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+
+        // Decide message code based on result & confidence
+        String messageCode;
+        if ("SUCCESS".equalsIgnoreCase(req.getResult())) {
+            messageCode = (req.getConfidence() != null && req.getConfidence() >= 70.0) ? "00" : "01";
+        } else {
+            messageCode = "01";
+        }
+
+        // Build response
+        response.put("message", messageCode);
+        response.put("schoolId", schoolId);
+        response.put("studentId", studentId);
+        response.put("base64", req.getImageBase64() != null ? req.getImageBase64() : "");
+        response.put("confidence", req.getConfidence() != null ? req.getConfidence() : 0.0);
+
+        if ("00".equals(messageCode)) {
+            Boolean feeStatus = student.getStatus();
+            response.put("feeStatus", (feeStatus != null && !feeStatus) ? "Fee Pending" : (feeStatus != null && feeStatus) ? "Fee Paid" : "Unknown");
+        }
+
+        // Publish to WebSocket
+        messagingTemplate.convertAndSend("/topic/validation", response);
+
+        // Persist swipe report on success
+        if ("00".equals(messageCode)) {
+            try {
+                SwipeReportMobile swipeReportMobile = new SwipeReportMobile();
+                swipeReportMobile.setRouteId(routeId);
+                swipeReportMobile.setSchoolId(schoolId);
+                swipeReportMobile.setStudentId(studentId);
+                swipeReportMobile.setLatitude(req.getLatitude());
+                swipeReportMobile.setLongitude(req.getLongitude());
+                swipeReportMobile.setImageName("");
+                swipeReportMobileRepository.save(swipeReportMobile);
+                System.out.println("💾 Saved swipe report to database for student: " + studentId);
+            } catch (Exception e) {
+                System.err.println("❌ Failed to save swipe report to database: " + e.getMessage());
+                e.printStackTrace();
+            }
         }
 
         return ResponseEntity.ok(response);

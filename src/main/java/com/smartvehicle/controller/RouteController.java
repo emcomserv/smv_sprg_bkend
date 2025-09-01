@@ -14,6 +14,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.Authentication;
+import com.smartvehicle.repository.SchoolRepository;
+import com.smartvehicle.repository.RouteRepository;
 
 import java.util.List;
 
@@ -31,6 +34,11 @@ public class RouteController {
     private RoutePointMapper routePointMapper;
     @Autowired
     private RoutePointRepository routePointRepository;
+
+    @Autowired
+    private SchoolRepository schoolRepository;
+    @Autowired
+    private RouteRepository routeRepository;
 
     @PostMapping("/register")
     public ResponseEntity<RouteRegResDTO> registerRoute(@Valid @RequestBody RouteRegistrationReq request) {
@@ -52,6 +60,19 @@ public class RouteController {
         List<Route> routes = routeService.getAllRoutes();
         List<RouteResponseDTO> routeResponseDTOs = routeMapper.toResponseDTO(routes);
         return ResponseEntity.ok(routeResponseDTOs);
+    }
+
+    @GetMapping("/mine")
+    public ResponseEntity<List<RouteResponseDTO>> getMyRoutes(Authentication authentication) {
+        if (authentication == null || !(authentication.getDetails() instanceof java.util.Map)) {
+            throw new RuntimeException("Unauthorised User");
+        }
+        java.util.Map<String, Object> details = (java.util.Map<String, Object>) authentication.getDetails();
+        Long userId = (Long) details.get("userId");
+        List<com.smartvehicle.entity.School> schools = schoolRepository.findByCreatedBy(userId);
+        List<String> schoolIds = schools.stream().map(com.smartvehicle.entity.School::getId).toList();
+        List<Route> routes = schoolIds.isEmpty() ? java.util.List.of() : routeRepository.findBySchool_IdIn(schoolIds);
+        return ResponseEntity.ok(routeMapper.toResponseDTO(routes));
     }
 
     /**
