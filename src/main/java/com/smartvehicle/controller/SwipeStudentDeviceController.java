@@ -99,6 +99,9 @@ public class SwipeStudentDeviceController {
     }
 
     // New: date-only variant (no time in query). Same response format as /ids
+    // ... existing code ...
+
+    // Modified: date-only variant with counts in response
     @GetMapping("/ids-by-date")
     public ResponseEntity<?> getDistinctStudentIdsByDate(
             @RequestParam String schoolId,
@@ -128,25 +131,272 @@ public class SwipeStudentDeviceController {
         }
         List<SwipeStudentDevice> rows = swipeStudentDeviceRepository
                 .findBySchoolIdAndRouteIdAndTimestampBetweenOrderByTimestampAsc(schoolId, routeId, startDt, endDt);
-        
+
         // Apply result filter
         if (result != null && !result.isBlank()) {
             rows = rows.stream().filter(r -> matchesResult(r.getReserv(), result)).collect(Collectors.toList());
         }
-        
+
         // Apply studentId filter
         if (studentId != null && !studentId.isBlank()) {
             rows = rows.stream().filter(r -> studentId.equals(r.getStudentId())).collect(Collectors.toList());
         }
-        
+
+        // Calculate counts based on reserve field
+        int matchedCount = 0;
+        int mismatchedCount = 0;
+        int duplicateCount = 0;
+
+        for (SwipeStudentDevice swipe : rows) {
+            String reserv = swipe.getReserv();
+            if (reserv != null && reserv.length() >= 2) {
+                String firstTwoChars = reserv.substring(0, 2);
+                if ("00".equals(firstTwoChars)) {
+                    matchedCount++;
+                } else if ("AA".equals(firstTwoChars)) {
+                    duplicateCount++;
+                } else if (firstTwoChars.matches("0[1-7]")) { // 01, 02, 03, 04, 05, 06, 07
+                    mismatchedCount++;
+                }
+            }
+        }
+
         List<SwipeStudentSummaryDTO> resp = rows.stream().map(s -> new SwipeStudentSummaryDTO(
                 s.getSchoolId(), s.getRouteId(), s.getStudentId(), s.getLatitude(), s.getLongitude(), s.getTimestamp(), s.getReserv()
         )).collect(Collectors.toList());
         if (resp.isEmpty()) {
             return ResponseEntity.status(404).body("No swipe records found for the given criteria");
         }
-        return ResponseEntity.ok(resp);
+
+        // Enhanced response with counts
+        Map<String, Object> response = new HashMap<>();
+        response.put("dateRange", startDate + " to " + endDate);
+        response.put("totalSwipes", resp.size());
+        response.put("matchedCount", matchedCount);
+        response.put("mismatchedCount", mismatchedCount);
+        response.put("duplicateCount", duplicateCount);
+        response.put("swipes", resp);
+
+        return ResponseEntity.ok(response);
     }
+
+
+
+    // Modified: Get evening swipes (after 12:00 PM) with date range support and counts
+    @GetMapping("/evening-swipes")
+    public ResponseEntity<?> getEveningSwipes(
+            @RequestParam String schoolId,
+            @RequestParam String routeId,
+            @RequestParam String startDate,
+            @RequestParam String endDate,
+            @RequestParam(name = "result", required = false) String result,
+            @RequestParam(name = "studentId", required = false) String studentId) {
+
+        if (isBlank(schoolId) || isBlank(routeId) || isBlank(startDate) || isBlank(endDate)) {
+            return ResponseEntity.badRequest().body("schoolId, routeId, startDate, and endDate are required");
+        }
+
+        if (result != null && !result.isBlank() && !isValidResultFilter(result)) {
+            return ResponseEntity.badRequest().body("Invalid result filter. Use 'matched', 'mismatched', or 00..07");
+        }
+
+        try {
+            // Parse the date range
+            java.time.LocalDate startD = java.time.LocalDate.parse(startDate);
+            java.time.LocalDate endD = java.time.LocalDate.parse(endDate);
+
+            if (endD.isBefore(startD)) {
+                return ResponseEntity.badRequest().body("endDate must be on/after startDate");
+            }
+
+            // Create date-time range for evening swipes
+            LocalDateTime startOfFirstDay = startD.atStartOfDay();
+            LocalDateTime endOfLastDay = endD.plusDays(1).atStartOfDay().minusNanos(1);
+
+            // Get all swipes in the date range
+            List<SwipeStudentDevice> allSwipes = swipeStudentDeviceRepository
+                    .findBySchoolIdAndRouteIdAndTimestampBetweenOrderByTimestampAsc(schoolId, routeId, startOfFirstDay, endOfLastDay);
+
+            // Filter for evening swipes (after 12:00 PM)
+            List<SwipeStudentDevice> eveningSwipes = allSwipes.stream()
+                    .filter(swipe -> {
+                        LocalDateTime swipeTime = swipe.getTimestamp();
+                        LocalDateTime eveningStart = swipeTime.toLocalDate().atTime(12, 0, 0);
+                        return swipeTime.isAfter(eveningStart) || swipeTime.isEqual(eveningStart);
+                    })
+                    .collect(Collectors.toList());
+
+            // Apply result filter
+            if (result != null && !result.isBlank()) {
+                eveningSwipes = eveningSwipes.stream()
+                        .filter(r -> matchesResult(r.getReserv(), result))
+                        .collect(Collectors.toList());
+            }
+
+            // Apply studentId filter
+            if (studentId != null && !studentId.isBlank()) {
+                eveningSwipes = eveningSwipes.stream()
+                        .filter(r -> studentId.equals(r.getStudentId()))
+                        .collect(Collectors.toList());
+            }
+
+            // Calculate counts based on reserve field
+            int matchedCount = 0;
+            int mismatchedCount = 0;
+            int duplicateCount = 0;
+
+            for (SwipeStudentDevice swipe : eveningSwipes) {
+                String reserv = swipe.getReserv();
+                if (reserv != null && reserv.length() >= 2) {
+                    String firstTwoChars = reserv.substring(0, 2);
+                    if ("00".equals(firstTwoChars)) {
+                        matchedCount++;
+                    } else if ("AA".equals(firstTwoChars)) {
+                        duplicateCount++;
+                    } else if (firstTwoChars.matches("0[1-7]")) { // 01, 02, 03, 04, 05, 06, 07
+                        mismatchedCount++;
+                    }
+                }
+            }
+
+            List<SwipeStudentSummaryDTO> resp = eveningSwipes.stream()
+                    .map(s -> new SwipeStudentSummaryDTO(
+                            s.getSchoolId(), s.getRouteId(), s.getStudentId(),
+                            s.getLatitude(), s.getLongitude(), s.getTimestamp(), s.getReserv()
+                    ))
+                    .collect(Collectors.toList());
+
+            if (resp.isEmpty()) {
+                return ResponseEntity.status(404).body("No evening swipe records found for the given date range");
+            }
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("swipeType", "evening");
+            response.put("timeRange", "12:00:00 to 23:59:59");
+            response.put("dateRange", startDate + " to " + endDate);
+            response.put("totalSwipes", resp.size());
+            response.put("matchedCount", matchedCount);
+            response.put("mismatchedCount", mismatchedCount);
+            response.put("duplicateCount", duplicateCount);
+            response.put("swipes", resp);
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("Error retrieving evening swipes: " + e.getMessage());
+        }
+    }
+    // ... existing code ...
+
+    // Modified: Get morning swipes (before 10:00 AM) with date range support and counts
+    @GetMapping("/morning-swipes")
+    public ResponseEntity<?> getMorningSwipes(
+            @RequestParam String schoolId,
+            @RequestParam String routeId,
+            @RequestParam String startDate,
+            @RequestParam String endDate,
+            @RequestParam(name = "result", required = false) String result,
+            @RequestParam(name = "studentId", required = false) String studentId) {
+
+        if (isBlank(schoolId) || isBlank(routeId) || isBlank(startDate) || isBlank(endDate)) {
+            return ResponseEntity.badRequest().body("schoolId, routeId, startDate, and endDate are required");
+        }
+
+        if (result != null && !result.isBlank() && !isValidResultFilter(result)) {
+            return ResponseEntity.badRequest().body("Invalid result filter. Use 'matched', 'mismatched', or 00..07");
+        }
+
+        try {
+            // Parse the date range
+            java.time.LocalDate startD = java.time.LocalDate.parse(startDate);
+            java.time.LocalDate endD = java.time.LocalDate.parse(endDate);
+
+            if (endD.isBefore(startD)) {
+                return ResponseEntity.badRequest().body("endDate must be on/after startDate");
+            }
+
+            // Create date-time range for morning swipes
+            LocalDateTime startOfFirstDay = startD.atStartOfDay();
+            LocalDateTime endOfLastDay = endD.plusDays(1).atStartOfDay().minusNanos(1);
+
+            // Get all swipes in the date range
+            List<SwipeStudentDevice> allSwipes = swipeStudentDeviceRepository
+                    .findBySchoolIdAndRouteIdAndTimestampBetweenOrderByTimestampAsc(schoolId, routeId, startOfFirstDay, endOfLastDay);
+
+            // Filter for morning swipes (before 10:00 AM)
+            List<SwipeStudentDevice> morningSwipes = allSwipes.stream()
+                    .filter(swipe -> {
+                        LocalDateTime swipeTime = swipe.getTimestamp();
+                        LocalDateTime morningCutoff = swipeTime.toLocalDate().atTime(10, 0, 0);
+                        return swipeTime.isBefore(morningCutoff);
+                    })
+                    .collect(Collectors.toList());
+
+            // Apply result filter
+            if (result != null && !result.isBlank()) {
+                morningSwipes = morningSwipes.stream()
+                        .filter(r -> matchesResult(r.getReserv(), result))
+                        .collect(Collectors.toList());
+            }
+
+            // Apply studentId filter
+            if (studentId != null && !studentId.isBlank()) {
+                morningSwipes = morningSwipes.stream()
+                        .filter(r -> studentId.equals(r.getStudentId()))
+                        .collect(Collectors.toList());
+            }
+
+            // Calculate counts based on reserve field
+            int matchedCount = 0;
+            int mismatchedCount = 0;
+            int duplicateCount = 0;
+
+            for (SwipeStudentDevice swipe : morningSwipes) {
+                String reserv = swipe.getReserv();
+                if (reserv != null && reserv.length() >= 2) {
+                    String firstTwoChars = reserv.substring(0, 2);
+                    if ("00".equals(firstTwoChars)) {
+                        matchedCount++;
+                    } else if ("AA".equals(firstTwoChars)) {
+                        duplicateCount++;
+                    } else if (firstTwoChars.matches("0[1-7]")) { // 01, 02, 03, 04, 05, 06, 07
+                        mismatchedCount++;
+                    }
+                }
+            }
+
+            List<SwipeStudentSummaryDTO> resp = morningSwipes.stream()
+                    .map(s -> new SwipeStudentSummaryDTO(
+                            s.getSchoolId(), s.getRouteId(), s.getStudentId(),
+                            s.getLatitude(), s.getLongitude(), s.getTimestamp(), s.getReserv()
+                    ))
+                    .collect(Collectors.toList());
+
+            if (resp.isEmpty()) {
+                return ResponseEntity.status(404).body("No morning swipe records found for the given date range");
+            }
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("swipeType", "morning");
+            response.put("timeRange", "00:00:00 to 10:00:00");
+            response.put("dateRange", startDate + " to " + endDate);
+            response.put("totalSwipes", resp.size());
+            response.put("matchedCount", matchedCount);
+            response.put("mismatchedCount", mismatchedCount);
+            response.put("duplicateCount", duplicateCount);
+            response.put("swipes", resp);
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("Error retrieving morning swipes: " + e.getMessage());
+        }
+    }
+
+// ... existing code ...
+
+// ... existing code ...
+
 
     @PostMapping("/generate-swipe-records")
     public ResponseEntity<?> generateSwipeRecords(
