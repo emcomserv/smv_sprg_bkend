@@ -16,6 +16,8 @@ public interface StudentMapper {
     @Mapping(target = "schoolId", source = "school.id")
     @Mapping(target = "routeName", source = "route.routeName")
     @Mapping(target = "schoolName", source = "school.name")
+    @Mapping(target = "parentFirstName", source = "parent.firstName")
+    @Mapping(target = "parentLastName", source = "parent.lastName")
     @Mapping(target = "routePointId", source = "routePoint.id")
     StudentResponseDTO toResponseDTO(Student student);
 

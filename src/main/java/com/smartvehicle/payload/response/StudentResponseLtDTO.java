@@ -10,6 +10,8 @@ public class StudentResponseLtDTO {
     private String firstName;
     private String lastName;
     private Long parentId;
+    private String parentFirstName;
+    private String parentLastName;
     private Long routeId;
     private String schoolId;
     private String routeName;

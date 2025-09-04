@@ -36,4 +36,13 @@ public interface SwipeStudentDeviceRepository extends JpaRepository<SwipeStudent
             String routeId,
             LocalDateTime start,
             LocalDateTime end);
+
+    // All swipe rows by school only in time range, ordered by timestamp
+    List<SwipeStudentDevice> findBySchoolIdAndTimestampBetweenOrderByTimestampAsc(
+            String schoolId,
+            LocalDateTime start,
+            LocalDateTime end);
+
+    // All swipe rows by school, ordered by timestamp (no date filter)
+    List<SwipeStudentDevice> findBySchoolIdOrderByTimestampAsc(String schoolId);
 } 

@@ -1,10 +1,17 @@
 package com.smartvehicle.service;
 
 import com.smartvehicle.entity.Device;
+import com.smartvehicle.entity.Admin;
+import com.smartvehicle.entity.Driver;
+import com.smartvehicle.entity.Attender;
 import com.smartvehicle.entity.Route;
 import com.smartvehicle.entity.Student;
 import com.smartvehicle.entity.SwipeStudentDevice;
 import com.smartvehicle.repository.DeviceRepository;
+import com.smartvehicle.repository.DeviceLocationRepository;
+import com.smartvehicle.repository.AdminRepository;
+import com.smartvehicle.repository.DriverRepository;
+import com.smartvehicle.repository.AttenderRepository;
 import com.smartvehicle.repository.RouteRepository;
 import com.smartvehicle.repository.StudentRepository;
 import com.smartvehicle.repository.SwipeStudentDeviceRepository;
@@ -61,6 +68,18 @@ public class DeviceAuthTcpServerService {
     private SimpMessagingTemplate simpMessagingTemplate;
     @Autowired
     private NotificationService notificationService;
+
+    @Autowired
+    private AdminRepository adminRepository;
+
+    @Autowired
+    private DriverRepository driverRepository;
+
+    @Autowired
+    private AttenderRepository attenderRepository;
+
+    @Autowired
+    private DeviceLocationRepository deviceLocationRepository;
 
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
 
@@ -685,11 +704,8 @@ public class DeviceAuthTcpServerService {
             }
 
             // 11. Notify parent based on result
-            if ("00".equals(responseCode)) {
-                notifyParentOfSuccessfulSwipe(studentId, schoolId, routeId, confidence);
-            } else {
-                notifyParentOfFailedSwipe(studentId, schoolId, routeId, responseCode, confidence);
-            }
+            // Send rich notifications to parent, admins, driver and attender
+            notifyAllRolesAboutSwipe(student, route, responseCode, confidence, null);
 
             return buildSwipeCardResponse(schoolId, routeId, studentId, responseCode);
 
@@ -705,12 +721,18 @@ public class DeviceAuthTcpServerService {
             Optional<String> tokenOpt = studentRepository.findParentDeviceTokenBySmStudentId(smStudentId);
             if (tokenOpt.isEmpty() || tokenOpt.get() == null || tokenOpt.get().isBlank()) {
                 System.out.println("ℹ️ No parent device token found for student " + smStudentId);
-                return;
+            } else {
+                String token = tokenOpt.get();
+                String title = "Notification";
+                String body = "your child has boarded the bus";
+                notificationService.sendNotification(token, title, body);
             }
-            String token = tokenOpt.get();
-            String title = "Notification";
-            String body = "your child has boarded the bus";
-            notificationService.sendNotification(token, title, body);
+
+            // Also notify admins of this school
+            notifyAdminsOfSwipeSuccess(schoolId, smStudentId, routeId, confidencePct);
+            // Notify driver and attender bound to the route
+            notifyDriverOfSwipe(schoolId, routeId, smStudentId, true, confidencePct, null);
+            notifyAttenderOfSwipe(schoolId, routeId, smStudentId, true, confidencePct, null);
         } catch (Exception e) {
             System.err.println("❌ Failed to send parent notification for student " + smStudentId + ": " + e.getMessage());
         }
@@ -721,14 +743,222 @@ public class DeviceAuthTcpServerService {
             Optional<String> tokenOpt = studentRepository.findParentDeviceTokenBySmStudentId(smStudentId);
             if (tokenOpt.isEmpty() || tokenOpt.get() == null || tokenOpt.get().isBlank()) {
                 System.out.println("ℹ️ No parent device token found for student " + smStudentId);
-                return;
+            } else {
+                String token = tokenOpt.get();
+                String title = "Notification";
+                String body = "your child image not matched";
+                notificationService.sendNotification(token, title, body);
             }
-            String token = tokenOpt.get();
-            String title = "Notification";
-            String body = "your child image not matched";
-            notificationService.sendNotification(token, title, body);
+
+            // Also notify admins of this school
+            notifyAdminsOfSwipeFailure(schoolId, smStudentId, routeId, resultCode, confidencePct);
+            // Notify driver and attender bound to the route
+            notifyDriverOfSwipe(schoolId, routeId, smStudentId, false, confidencePct, resultCode);
+            notifyAttenderOfSwipe(schoolId, routeId, smStudentId, false, confidencePct, resultCode);
         } catch (Exception e) {
             System.err.println("❌ Failed to send failure notification for student " + smStudentId + ": " + e.getMessage());
+        }
+    }
+
+    private void notifyDriverOfSwipe(String schoolId, String smRouteId, String smStudentId,
+                                     boolean success, int confidencePct, String resultCode) {
+        try {
+            Optional<Route> routeOpt = routeRepository.findBySmRouteId(smRouteId);
+            if (routeOpt.isEmpty()) {
+                System.out.println("ℹ️ Route not found for smRouteId: " + smRouteId);
+                return;
+            }
+            Route route = routeOpt.get();
+            Optional<Driver> driverOpt = driverRepository.findByRoute_Id(route.getId());
+            if (driverOpt.isEmpty()) {
+                System.out.println("ℹ️ No driver assigned to route: " + smRouteId);
+                return;
+            }
+            Driver driver = driverOpt.get();
+            if (driver.getUser() == null || driver.getUser().getDeviceToken() == null || driver.getUser().getDeviceToken().isBlank()) {
+                System.out.println("ℹ️ Driver has no device token for route: " + smRouteId);
+                return;
+            }
+            String title = success ? "Student Swipe Success" : "Student Swipe Mismatch";
+            String body = success
+                    ? ("Student " + smStudentId + " matched (" + confidencePct + "%) on your route")
+                    : ("Student " + smStudentId + " result " + resultCode + " (" + confidencePct + "%) on your route");
+            notificationService.sendNotification(driver.getUser().getDeviceToken(), title, body);
+        } catch (Exception e) {
+            System.err.println("❌ Failed to notify driver for route " + smRouteId + ": " + e.getMessage());
+        }
+    }
+
+    private void notifyAttenderOfSwipe(String schoolId, String smRouteId, String smStudentId,
+                                       boolean success, int confidencePct, String resultCode) {
+        try {
+            Optional<Route> routeOpt = routeRepository.findBySmRouteId(smRouteId);
+            if (routeOpt.isEmpty()) {
+                System.out.println("ℹ️ Route not found for smRouteId: " + smRouteId);
+                return;
+            }
+            Route route = routeOpt.get();
+            Optional<Attender> attOpt = attenderRepository.findByRoute_Id(route.getId());
+            if (attOpt.isEmpty()) {
+                System.out.println("ℹ️ No attender assigned to route: " + smRouteId);
+                return;
+            }
+            Attender att = attOpt.get();
+            if (att.getUser() == null || att.getUser().getDeviceToken() == null || att.getUser().getDeviceToken().isBlank()) {
+                System.out.println("ℹ️ Attender has no device token for route: " + smRouteId);
+                return;
+            }
+            String title = success ? "Student Swipe Success" : "Student Swipe Mismatch";
+            String body = success
+                    ? ("Student " + smStudentId + " matched (" + confidencePct + "%) on your route")
+                    : ("Student " + smStudentId + " result " + resultCode + " (" + confidencePct + "%) on your route");
+            notificationService.sendNotification(att.getUser().getDeviceToken(), title, body);
+        } catch (Exception e) {
+            System.err.println("❌ Failed to notify attender for route " + smRouteId + ": " + e.getMessage());
+        }
+    }
+
+    private void notifyAdminsOfSwipeSuccess(String schoolId, String smStudentId, String routeId, int confidencePct) {
+        try {
+            List<Admin> admins = adminRepository.findBySchool_Id(schoolId);
+            if (admins == null || admins.isEmpty()) {
+                System.out.println("ℹ️ No admins found to notify for school: " + schoolId);
+                return;
+            }
+            String title = "Student Swipe Success";
+            String body = "Student " + smStudentId + " matched on route " + routeId + " (" + confidencePct + "%)";
+            for (Admin admin : admins) {
+                if (admin.getUser() != null && admin.getUser().getDeviceToken() != null && !admin.getUser().getDeviceToken().isBlank()) {
+                    notificationService.sendNotification(admin.getUser().getDeviceToken(), title, body);
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Failed to notify admins (success) for school " + schoolId + ": " + e.getMessage());
+        }
+    }
+
+    private void notifyAdminsOfSwipeFailure(String schoolId, String smStudentId, String routeId, String resultCode, int confidencePct) {
+        try {
+            List<Admin> admins = adminRepository.findBySchool_Id(schoolId);
+            if (admins == null || admins.isEmpty()) {
+                System.out.println("ℹ️ No admins found to notify for school: " + schoolId);
+                return;
+            }
+            String title = "Student Swipe Mismatch";
+            String body = "Student " + smStudentId + " result " + resultCode + " on route " + routeId + " (" + confidencePct + "%)";
+            for (Admin admin : admins) {
+                if (admin.getUser() != null && admin.getUser().getDeviceToken() != null && !admin.getUser().getDeviceToken().isBlank()) {
+                    notificationService.sendNotification(admin.getUser().getDeviceToken(), title, body);
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Failed to notify admins (failure) for school " + schoolId + ": " + e.getMessage());
+        }
+    }
+
+    private void notifyAllRolesAboutSwipe(Student student, Route route, String resultCode, int confidencePct, String validationDetail) {
+        try {
+            String schoolId = route.getSchool() != null ? route.getSchool().getId() : "";
+            String schoolName = route.getSchool() != null ? route.getSchool().getName() : "";
+            String routeId = route.getSmRouteId();
+            String routeName = route.getRouteName();
+            String studentId = student.getSmStudentId();
+            String studentName = (student.getFirstName() != null ? student.getFirstName() : "") + " " + (student.getLastName() != null ? student.getLastName() : "").trim();
+
+            String humanResult = toHumanResult(resultCode, validationDetail);
+            boolean success = "00".equals(resultCode);
+
+            // Parent
+            try {
+                Optional<String> parentToken = studentRepository.findParentDeviceTokenBySmStudentId(studentId);
+                if (parentToken.isPresent() && parentToken.get() != null && !parentToken.get().isBlank()) {
+                    String title = success ? "Swipe Successful" : "Swipe Issue";
+                    String body = "School: " + schoolId + ", " + schoolName + "\n" +
+                            "Student: " + studentId + ", " + studentName + "\n" +
+                            "Route: " + routeId + ", " + routeName + "\n" +
+                            "Result: " + humanResult + "\n" +
+                            "Percentage: " + confidencePct + "%";
+                    notificationService.sendNotification(parentToken.get(), title, body);
+                }
+            } catch (Exception ignore) {}
+
+            // Admins (by school)
+            try {
+                List<Admin> admins = adminRepository.findBySchool_Id(schoolId);
+                if (admins != null) {
+                    String title = success ? "Student Swipe Success" : "Student Swipe Issue";
+                    String body = "Student: " + studentId + ", " + studentName + "\n" +
+                            "Route: " + routeId + ", " + routeName + "\n" +
+                            "Result: " + humanResult + "\n" +
+                            "Percentage: " + confidencePct + "%";
+                    for (Admin a : admins) {
+                        if (a.getUser() != null && a.getUser().getDeviceToken() != null && !a.getUser().getDeviceToken().isBlank()) {
+                            notificationService.sendNotification(a.getUser().getDeviceToken(), title, body);
+                        }
+                    }
+                }
+            } catch (Exception ignore) {}
+
+            // Driver (by route)
+            try {
+                Optional<Driver> driverOpt = driverRepository.findByRoute_Id(route.getId());
+                if (driverOpt.isPresent()) {
+                    Driver d = driverOpt.get();
+                    if (d.getUser() != null && d.getUser().getDeviceToken() != null && !d.getUser().getDeviceToken().isBlank()) {
+                        String title = success ? "Student Swipe Success" : "Student Swipe Issue";
+                        String body = "School: " + schoolId + ", " + schoolName + "\n" +
+                                "Student: " + studentId + ", " + studentName + "\n" +
+                                "Route: " + routeId + ", " + routeName + "\n" +
+                                "Result: " + humanResult + "\n" +
+                                "Percentage: " + confidencePct + "%";
+                        notificationService.sendNotification(d.getUser().getDeviceToken(), title, body);
+                    }
+                }
+            } catch (Exception ignore) {}
+
+            // Attender (by route)
+            try {
+                Optional<Attender> attOpt = attenderRepository.findByRoute_Id(route.getId());
+                if (attOpt.isPresent()) {
+                    Attender a = attOpt.get();
+                    if (a.getUser() != null && a.getUser().getDeviceToken() != null && !a.getUser().getDeviceToken().isBlank()) {
+                        String title = success ? "Student Swipe Success" : "Student Swipe Issue";
+                        String body = "School: " + schoolId + ", " + schoolName + "\n" +
+                                "Student: " + studentId + ", " + studentName + "\n" +
+                                "Route: " + routeId + ", " + routeName + "\n" +
+                                "Result: " + humanResult + "\n" +
+                                "Percentage: " + confidencePct + "%";
+                        notificationService.sendNotification(a.getUser().getDeviceToken(), title, body);
+                    }
+                }
+            } catch (Exception ignore) {}
+
+        } catch (Exception e) {
+            System.err.println("❌ Failed to send rich notifications: " + e.getMessage());
+        }
+    }
+
+    private String toHumanResult(String code, String validationDetail) {
+        if (code == null) return "Unknown";
+        switch (code) {
+            case "00":
+                return "Successful match";
+            case "01":
+                return "Face not matched (confidence too low)";
+            case "02":
+                return "Student ID not found";
+            case "03":
+                return "No face detected in image";
+            case "04":
+                return "Image is blurry";
+            case "05":
+                return "Student not trained";
+            case "06":
+                return "Validation failed" + (validationDetail != null && !validationDetail.isBlank() ? (" - " + validationDetail) : "");
+            case "07":
+                return "Server error";
+            default:
+                return "Unknown result (" + code + ")";
         }
     }
 
@@ -1194,6 +1424,20 @@ public class DeviceAuthTcpServerService {
                     latitude == null || longitude == null) {
                 System.err.println("❌ Invalid GPS location message format: " + message);
                 return;
+            }
+
+            // Persist to smv_device_location
+            try {
+                com.smartvehicle.entity.DeviceLocation loc = new com.smartvehicle.entity.DeviceLocation();
+                loc.setDeviceId(deviceId);
+                loc.setSchoolId(schoolId);
+                loc.setRouteId(routeId);
+                loc.setLatitude(latitude);
+                loc.setLongitude(longitude);
+                loc.setEventTime(LocalDateTime.now());
+                deviceLocationRepository.save(loc);
+            } catch (Exception e) {
+                System.err.println("❌ Failed to persist device location: " + e.getMessage());
             }
 
             // Send GPS location to frontend via WebSocket

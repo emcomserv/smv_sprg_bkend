@@ -10,6 +10,8 @@ public class StudentResponseDTO {
     private String firstName;
     private String lastName;
     private Long parentId;
+    private String parentFirstName;
+    private String parentLastName;
     private Integer age;
     private String gender;
     private Boolean status;

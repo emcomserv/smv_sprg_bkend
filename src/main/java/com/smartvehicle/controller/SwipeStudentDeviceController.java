@@ -57,7 +57,7 @@ public class SwipeStudentDeviceController {
             return ResponseEntity.badRequest().body("end must be after start");
         }
         if (result != null && !result.isBlank() && !isValidResultFilter(result)) {
-            return ResponseEntity.badRequest().body("Invalid result filter. Use 'matched', 'mismatched', or 00..07");
+            return ResponseEntity.badRequest().body("Invalid result filter. Use 'matched', 'mismatched', 'duplicate', or 00..07");
         }
         // Return all rows in range (including duplicate studentIds)
         List<SwipeStudentDevice> rows = swipeStudentDeviceRepository
@@ -105,32 +105,51 @@ public class SwipeStudentDeviceController {
     @GetMapping("/ids-by-date")
     public ResponseEntity<?> getDistinctStudentIdsByDate(
             @RequestParam String schoolId,
-            @RequestParam String routeId,
-            @RequestParam("startDate") String startDate,
-            @RequestParam("endDate") String endDate,
+            @RequestParam(required = false) String routeId,
+            @RequestParam(name = "startDate", required = false) String startDate,
+            @RequestParam(name = "endDate", required = false) String endDate,
             @RequestParam(name = "result", required = false) String result,
             @RequestParam(name = "studentId", required = false) String studentId) {
-        if (isBlank(schoolId) || isBlank(routeId) || isBlank(startDate) || isBlank(endDate)) {
-            return ResponseEntity.badRequest().body("schoolId, routeId, startDate, endDate are required");
+        if (isBlank(schoolId)) {
+            return ResponseEntity.badRequest().body("schoolId is required");
         }
         if (result != null && !result.isBlank() && !isValidResultFilter(result)) {
-            return ResponseEntity.badRequest().body("Invalid result filter. Use 'matched', 'mismatched', or 00..07");
+            return ResponseEntity.badRequest().body("Invalid result filter. Use 'matched', 'mismatched', 'duplicate', or 00..07");
         }
-        java.time.LocalDate startD;
-        java.time.LocalDate endD;
-        try {
-            startD = java.time.LocalDate.parse(startDate);
-            endD = java.time.LocalDate.parse(endDate);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Invalid date format. Use yyyy-MM-dd");
+        List<SwipeStudentDevice> rows;
+        if (startDate == null || startDate.isBlank() || endDate == null || endDate.isBlank()) {
+            // No dates supplied: return all for the school (optionally route filtered), oldest first
+            if (routeId != null && !routeId.isBlank()) {
+                // Without start/end, repository signature requires between; fallback to min-max
+                LocalDateTime startDt = LocalDateTime.of(1970, 1, 1, 0, 0);
+                LocalDateTime endDt = LocalDateTime.now();
+                rows = swipeStudentDeviceRepository
+                        .findBySchoolIdAndRouteIdAndTimestampBetweenOrderByTimestampAsc(schoolId, routeId, startDt, endDt);
+            } else {
+                rows = swipeStudentDeviceRepository.findBySchoolIdOrderByTimestampAsc(schoolId);
+            }
+        } else {
+            java.time.LocalDate startD;
+            java.time.LocalDate endD;
+            try {
+                startD = java.time.LocalDate.parse(startDate);
+                endD = java.time.LocalDate.parse(endDate);
+            } catch (Exception e) {
+                return ResponseEntity.badRequest().body("Invalid date format. Use yyyy-MM-dd");
+            }
+            LocalDateTime startDt = startD.atStartOfDay();
+            LocalDateTime endDt = endD.plusDays(1).atStartOfDay().minusNanos(1);
+            if (endDt.isBefore(startDt)) {
+                return ResponseEntity.badRequest().body("endDate must be on/after startDate");
+            }
+            if (routeId != null && !routeId.isBlank()) {
+                rows = swipeStudentDeviceRepository
+                        .findBySchoolIdAndRouteIdAndTimestampBetweenOrderByTimestampAsc(schoolId, routeId, startDt, endDt);
+            } else {
+                rows = swipeStudentDeviceRepository
+                        .findBySchoolIdAndTimestampBetweenOrderByTimestampAsc(schoolId, startDt, endDt);
+            }
         }
-        LocalDateTime startDt = startD.atStartOfDay();
-        LocalDateTime endDt = endD.plusDays(1).atStartOfDay().minusNanos(1);
-        if (endDt.isBefore(startDt)) {
-            return ResponseEntity.badRequest().body("endDate must be on/after startDate");
-        }
-        List<SwipeStudentDevice> rows = swipeStudentDeviceRepository
-                .findBySchoolIdAndRouteIdAndTimestampBetweenOrderByTimestampAsc(schoolId, routeId, startDt, endDt);
 
         // Apply result filter
         if (result != null && !result.isBlank()) {
@@ -197,7 +216,7 @@ public class SwipeStudentDeviceController {
         }
 
         if (result != null && !result.isBlank() && !isValidResultFilter(result)) {
-            return ResponseEntity.badRequest().body("Invalid result filter. Use 'matched', 'mismatched', or 00..07");
+            return ResponseEntity.badRequest().body("Invalid result filter. Use 'matched', 'mismatched', 'duplicate', or 00..07");
         }
 
         try {
@@ -303,7 +322,7 @@ public class SwipeStudentDeviceController {
         }
 
         if (result != null && !result.isBlank() && !isValidResultFilter(result)) {
-            return ResponseEntity.badRequest().body("Invalid result filter. Use 'matched', 'mismatched', or 00..07");
+            return ResponseEntity.badRequest().body("Invalid result filter. Use 'matched', 'mismatched', 'duplicate', or 00..07");
         }
 
         try {
@@ -398,6 +417,62 @@ public class SwipeStudentDeviceController {
 // ... existing code ...
 
 
+    @GetMapping("/by-school")
+    public ResponseEntity<?> getSwipesBySchool(
+            @RequestParam String schoolId,
+            @RequestParam(name = "result", required = false) String result,
+            @RequestParam(name = "studentId", required = false) String studentId) {
+        if (isBlank(schoolId)) {
+            return ResponseEntity.badRequest().body("schoolId is required");
+        }
+        if (result != null && !result.isBlank() && !isValidResultFilter(result)) {
+            return ResponseEntity.badRequest().body("Invalid result filter. Use 'matched', 'mismatched', 'duplicate', or 00..07");
+        }
+
+        List<SwipeStudentDevice> rows = swipeStudentDeviceRepository.findBySchoolIdOrderByTimestampAsc(schoolId);
+
+        if (result != null && !result.isBlank()) {
+            rows = rows.stream().filter(r -> matchesResult(r.getReserv(), result)).collect(Collectors.toList());
+        }
+
+        if (studentId != null && !studentId.isBlank()) {
+            rows = rows.stream().filter(r -> studentId.equals(r.getStudentId())).collect(Collectors.toList());
+        }
+
+        int matchedCount = 0;
+        int mismatchedCount = 0;
+        int duplicateCount = 0;
+        for (SwipeStudentDevice swipe : rows) {
+            String reserv = swipe.getReserv();
+            if (reserv != null && reserv.length() >= 2) {
+                String firstTwoChars = reserv.substring(0, 2);
+                if ("00".equals(firstTwoChars)) {
+                    matchedCount++;
+                } else if ("AA".equals(firstTwoChars)) {
+                    duplicateCount++;
+                } else if (firstTwoChars.matches("0[1-7]")) { // 01, 02, 03, 04, 05, 06, 07
+                    mismatchedCount++;
+                }
+            }
+        }
+
+        List<SwipeStudentSummaryDTO> resp = rows.stream().map(s -> new SwipeStudentSummaryDTO(
+                s.getSchoolId(), s.getRouteId(), s.getStudentId(), s.getLatitude(), s.getLongitude(), s.getTimestamp(), s.getReserv()
+        )).collect(Collectors.toList());
+
+        if (resp.isEmpty()) {
+            return ResponseEntity.status(404).body("No swipe records found for the given criteria");
+        }
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("totalSwipes", resp.size());
+        response.put("matchedCount", matchedCount);
+        response.put("mismatchedCount", mismatchedCount);
+        response.put("duplicateCount", duplicateCount);
+        response.put("swipes", resp);
+
+        return ResponseEntity.ok(response);
+    }
     @PostMapping("/generate-swipe-records")
     public ResponseEntity<?> generateSwipeRecords(
             @RequestParam String schoolId,
@@ -544,8 +619,10 @@ public class SwipeStudentDeviceController {
         if (reserv == null || reserv.length() < 2) return false;
         String code = reserv.substring(0, 2);
         boolean isMatched = code.equals("00");
+        boolean isDuplicate = code.equals("AA");
         if ("matched".equalsIgnoreCase(desired)) return isMatched;
-        if ("mismatched".equalsIgnoreCase(desired)) return !isMatched;
+        if ("mismatched".equalsIgnoreCase(desired)) return !isMatched && !isDuplicate;
+        if ("duplicate".equalsIgnoreCase(desired)) return isDuplicate;
         // If specific code requested like "02", match exactly
         if (desired.length() == 2 && desired.chars().allMatch(Character::isDigit)) {
             return code.equals(desired);
@@ -555,7 +632,7 @@ public class SwipeStudentDeviceController {
 
     private boolean isBlank(String s) { return s == null || s.trim().isEmpty(); }
     private boolean isValidResultFilter(String r) {
-        if ("matched".equalsIgnoreCase(r) || "mismatched".equalsIgnoreCase(r)) return true;
+        if ("matched".equalsIgnoreCase(r) || "mismatched".equalsIgnoreCase(r) || "duplicate".equalsIgnoreCase(r)) return true;
         return r.length() == 2 && r.chars().allMatch(Character::isDigit) && r.charAt(0) == '0' && r.charAt(1) >= '0' && r.charAt(1) <= '7';
     }
 }
