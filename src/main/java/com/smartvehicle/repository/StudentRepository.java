@@ -20,6 +20,8 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
 
     List<Student> findAllByRoutePoint_Id(Long id);
 
+    List<Student> findAllByRoute_IdAndRoutePoint_Id(Long routeId, Long routePointId);
+
     List<Student> findBySchool_Id(String schoolId);
 
     List<Student> findBySchool_IdIn(List<String> schoolIds);

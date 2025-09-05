@@ -136,6 +136,15 @@ public class StudentController {
         return ResponseEntity.ok(studentResponseDTOS);
     }
 
+    @GetMapping("/route/{routeId}/route-point/{routePointId}")
+    public ResponseEntity<List<StudentResponseDTO>> getStudentsByRouteAndRoutePoint(
+            @PathVariable Long routeId,
+            @PathVariable Long routePointId) {
+        List<Student> students = studentRepository.findAllByRoute_IdAndRoutePoint_Id(routeId, routePointId);
+        List<StudentResponseDTO> response = studentMapper.toResponseDTO(students);
+        return ResponseEntity.ok(response);
+    }
+
     @PostMapping("/{id}/change-routepoint")
     public ResponseEntity<StudentResponseDTO> changeRoutePoint(@PathVariable Long id,
                                                                @RequestBody StudentPickupPointReq req) {

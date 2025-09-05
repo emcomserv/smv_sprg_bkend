@@ -35,4 +35,6 @@ public interface AttenderRepository extends JpaRepository<Attender, Long> {
     List<Attender> findAllWithRelationships();
 
     List<Attender> findBySchool_IdIn(List<String> schoolIds);
+
+    List<Attender> findBySchool_Id(String schoolId);
 }

@@ -78,6 +78,13 @@ public class AttenderController {
         return ResponseEntity.ok(attenderResponseDTOS);
     }
 
+    @GetMapping("/school/{schoolId}")
+    public ResponseEntity<List<AttenderResponseDTO>> getAttendersBySchool(@PathVariable String schoolId) {
+        List<Attender> attenders = attenderRepository.findBySchool_Id(schoolId);
+        List<AttenderResponseDTO> response = attenderMapper.toResponseDTO(attenders);
+        return ResponseEntity.ok(response);
+    }
+
     /**
      * Get a route by ID
      */

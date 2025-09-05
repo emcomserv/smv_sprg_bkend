@@ -10,6 +10,7 @@ public class AttenderResponseDTO {
     private String firstName;
     private String lastName;
     private UserResponseLtDTO user;
+    private String phone;
     private Long routeId;
     private String smRouteId;
     private String schoolId;
