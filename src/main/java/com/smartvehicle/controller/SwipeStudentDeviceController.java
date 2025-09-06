@@ -3,9 +3,13 @@ package com.smartvehicle.controller;
 import com.smartvehicle.entity.SwipeStudentDevice;
 import com.smartvehicle.entity.RouteSchoolStudentMapping;
 import com.smartvehicle.entity.RoutePoint;
+import com.smartvehicle.entity.Student;
+import com.smartvehicle.entity.Route;
 import com.smartvehicle.repository.SwipeStudentDeviceRepository;
 import com.smartvehicle.repository.RouteSchlStudentMappingRepo;
 import com.smartvehicle.repository.RoutePointRepository;
+import com.smartvehicle.repository.StudentRepository;
+import com.smartvehicle.repository.RouteRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,11 +17,13 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PathVariable;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import com.smartvehicle.payload.response.SwipeStudentSummaryDTO;
 
@@ -33,6 +39,12 @@ public class SwipeStudentDeviceController {
     
     @Autowired
     private RoutePointRepository routePointRepository;
+    
+    @Autowired
+    private StudentRepository studentRepository;
+    
+    @Autowired
+    private RouteRepository routeRepository;
 
     @GetMapping("/ids")
     public ResponseEntity<?> getDistinctStudentIds(
@@ -477,6 +489,7 @@ public class SwipeStudentDeviceController {
     public ResponseEntity<?> generateSwipeRecords(
             @RequestParam String schoolId,
             @RequestParam String date,
+            @RequestParam(name = "routeId", required = false) String routeId,
             @RequestParam(name = "time", required = false) String time,
             @RequestParam(name = "timeWindow", required = false, defaultValue = "30") Integer timeWindow) {
         
@@ -490,77 +503,91 @@ public class SwipeStudentDeviceController {
             LocalDateTime startOfDay = targetDate.atStartOfDay();
             LocalDateTime endOfDay = targetDate.plusDays(1).atStartOfDay().minusNanos(1);
             
-            // Get all route-student mappings for this school
-            List<RouteSchoolStudentMapping> mappings = routeSchlStudentMappingRepo.findAll();
-            List<RouteSchoolStudentMapping> schoolMappings = mappings.stream()
-                    .filter(m -> m.getSchool().getId().equals(schoolId))
-                    .collect(Collectors.toList());
+            // Get students for this school, optionally filtered by route
+            List<Student> students;
+            if (routeId != null && !routeId.isBlank()) {
+                // Find route by smRouteId first
+                Optional<Route> routeOpt = routeRepository.findBySmRouteId(routeId);
+                if (routeOpt.isEmpty()) {
+                    return ResponseEntity.status(404).body("Route not found: " + routeId);
+                }
+                students = studentRepository.findAllByRoute_IdAndSchool_Id(routeOpt.get().getId(), schoolId);
+            } else {
+                students = studentRepository.findBySchool_Id(schoolId);
+            }
             
-            if (schoolMappings.isEmpty()) {
-                return ResponseEntity.status(404).body("No routes found for school: " + schoolId);
+            if (students.isEmpty()) {
+                return ResponseEntity.status(404).body("No students found for school: " + schoolId + 
+                    (routeId != null ? " and route: " + routeId : ""));
             }
             
             int totalRecords = 0;
             int successRecords = 0;
             
-            for (RouteSchoolStudentMapping mapping : schoolMappings) {
-                String routeId = mapping.getRoute().getSmRouteId();
-                String studentId = mapping.getSmStudentId();
+            for (Student student : students) {
+                String studentRouteId = student.getRoute() != null ? student.getRoute().getSmRouteId() : null;
+                String studentId = student.getSmStudentId();
                 
-                // Get route points for this route to pick coordinates
-                List<RoutePoint> routePoints = routePointRepository.findByRoute_SmRouteId(routeId);
+                if (studentRouteId == null || studentId == null) {
+                    System.err.println("Skipping student " + studentId + " - missing route or studentId");
+                    totalRecords++;
+                    continue;
+                }
                 
-                if (!routePoints.isEmpty()) {
-                    // Pick a random route point for coordinates
-                    RoutePoint randomPoint = routePoints.get((int) (Math.random() * routePoints.size()));
-                    
-                    // Generate random reserve value
-                    String reserve = generateRandomReserve();
-                    
-                    // Use manually provided time with random window or generate random time
-                    LocalDateTime recordTimestamp;
-                    if (time != null && !time.isBlank()) {
-                        try {
-                            // Parse the time in HH:mm:ss format
-                            java.time.LocalTime parsedTime = java.time.LocalTime.parse(time);
-                            LocalDateTime baseTime = startOfDay.plusHours(parsedTime.getHour())
-                                                              .plusMinutes(parsedTime.getMinute())
-                                                              .plusSeconds(parsedTime.getSecond());
-                            
-                            // Generate random time within the specified window (default 30 minutes)
-                            // Window goes from (baseTime - timeWindow/2) to (baseTime + timeWindow/2)
-                            int windowMinutes = timeWindow / 2; // Half window on each side
-                            long randomMinutes = (long) (Math.random() * timeWindow) - windowMinutes;
-                            recordTimestamp = baseTime.plusMinutes(randomMinutes);
-                            
-                        } catch (Exception e) {
-                            return ResponseEntity.badRequest().body("Invalid time format. Use HH:mm:ss (e.g., 18:31:12)");
-                        }
-                    } else {
-                        // Generate random timestamp if no time provided
-                        recordTimestamp = startOfDay.plusMinutes((long) (Math.random() * 1440));
-                    }
-                    
-                    // Generate image name: studentid_20250816-183112.jpg
-                    String imageName = generateImageName(studentId, recordTimestamp);
-                    
-                    // Create swipe record
-                    SwipeStudentDevice swipeRecord = new SwipeStudentDevice();
-                    swipeRecord.setSchoolId(schoolId);
-                    swipeRecord.setRouteId(routeId);
-                    swipeRecord.setStudentId(studentId);
-                    swipeRecord.setLatitude(randomPoint.getLatitude());
-                    swipeRecord.setLongitude(randomPoint.getLongitude());
-                    swipeRecord.setTimestamp(recordTimestamp);
-                    swipeRecord.setImageName(imageName);
-                    swipeRecord.setReserv(reserve);
-                    
+                // Use the student's assigned route point for coordinates
+                RoutePoint studentRoutePoint = student.getRoutePoint();
+                if (studentRoutePoint == null) {
+                    System.err.println("Skipping student " + studentId + " - no route point assigned");
+                    totalRecords++;
+                    continue;
+                }
+                
+                // Generate random reserve value
+                String reserve = generateRandomReserve();
+                
+                // Use manually provided time with random window or generate random time
+                LocalDateTime recordTimestamp;
+                if (time != null && !time.isBlank()) {
                     try {
-                        swipeStudentDeviceRepository.save(swipeRecord);
-                        successRecords++;
+                        // Parse the time in HH:mm:ss format
+                        java.time.LocalTime parsedTime = java.time.LocalTime.parse(time);
+                        LocalDateTime baseTime = startOfDay.plusHours(parsedTime.getHour())
+                                                          .plusMinutes(parsedTime.getMinute())
+                                                          .plusSeconds(parsedTime.getSecond());
+                        
+                        // Generate random time within the specified window (default 30 minutes)
+                        // Window goes from (baseTime - timeWindow/2) to (baseTime + timeWindow/2)
+                        int windowMinutes = timeWindow / 2; // Half window on each side
+                        long randomMinutes = (long) (Math.random() * timeWindow) - windowMinutes;
+                        recordTimestamp = baseTime.plusMinutes(randomMinutes);
+                        
                     } catch (Exception e) {
-                        System.err.println("Failed to save swipe record for student: " + studentId + ", Error: " + e.getMessage());
+                        return ResponseEntity.badRequest().body("Invalid time format. Use HH:mm:ss (e.g., 18:31:12)");
                     }
+                } else {
+                    // Generate random timestamp if no time provided
+                    recordTimestamp = startOfDay.plusMinutes((long) (Math.random() * 1440));
+                }
+                
+                // Generate image name: studentid_20250816-183112.jpg
+                String imageName = generateImageName(studentId, recordTimestamp);
+                
+                // Create swipe record using student's assigned route point coordinates
+                SwipeStudentDevice swipeRecord = new SwipeStudentDevice();
+                swipeRecord.setSchoolId(schoolId);
+                swipeRecord.setRouteId(studentRouteId);
+                swipeRecord.setStudentId(studentId);
+                swipeRecord.setLatitude(studentRoutePoint.getLatitude());
+                swipeRecord.setLongitude(studentRoutePoint.getLongitude());
+                swipeRecord.setTimestamp(recordTimestamp);
+                swipeRecord.setImageName(imageName);
+                swipeRecord.setReserv(reserve);
+                
+                try {
+                    swipeStudentDeviceRepository.save(swipeRecord);
+                    successRecords++;
+                } catch (Exception e) {
+                    System.err.println("Failed to save swipe record for student: " + studentId + ", Error: " + e.getMessage());
                 }
                 totalRecords++;
             }
@@ -634,6 +661,54 @@ public class SwipeStudentDeviceController {
     private boolean isValidResultFilter(String r) {
         if ("matched".equalsIgnoreCase(r) || "mismatched".equalsIgnoreCase(r) || "duplicate".equalsIgnoreCase(r)) return true;
         return r.length() == 2 && r.chars().allMatch(Character::isDigit) && r.charAt(0) == '0' && r.charAt(1) >= '0' && r.charAt(1) <= '7';
+    }
+
+    // New: Fetch all rows for a school+route on a particular date BEFORE 12:00 (morning)
+    @GetMapping("/{schoolId}/{routeId}/{date}/morning")
+    public ResponseEntity<?> getMorningSwipesForDate(
+            @PathVariable String schoolId,
+            @PathVariable String routeId,
+            @PathVariable String date
+    ) {
+        if (isBlank(schoolId) || isBlank(routeId) || isBlank(date)) {
+            return ResponseEntity.badRequest().body("schoolId, routeId and date are required");
+        }
+        try {
+            java.time.LocalDate d = java.time.LocalDate.parse(date); // yyyy-MM-dd
+            LocalDateTime startOfDay = d.atStartOfDay();
+            LocalDateTime noon = d.atTime(12, 0, 0);
+
+            List<SwipeStudentDevice> rows = swipeStudentDeviceRepository
+                    .findBySchoolIdAndRouteIdAndTimestampBetweenOrderByTimestampAsc(
+                            schoolId, routeId, startOfDay, noon.minusNanos(1));
+            return ResponseEntity.ok(rows);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Invalid date format. Use yyyy-MM-dd");
+        }
+    }
+
+    // New: Fetch all rows for a school+route on a particular date AT/AFTER 12:00 (evening)
+    @GetMapping("/{schoolId}/{routeId}/{date}/evening")
+    public ResponseEntity<?> getEveningSwipesForDate(
+            @PathVariable String schoolId,
+            @PathVariable String routeId,
+            @PathVariable String date
+    ) {
+        if (isBlank(schoolId) || isBlank(routeId) || isBlank(date)) {
+            return ResponseEntity.badRequest().body("schoolId, routeId and date are required");
+        }
+        try {
+            java.time.LocalDate d = java.time.LocalDate.parse(date); // yyyy-MM-dd
+            LocalDateTime noon = d.atTime(12, 0, 0);
+            LocalDateTime endOfDay = d.plusDays(1).atStartOfDay().minusNanos(1);
+
+            List<SwipeStudentDevice> rows = swipeStudentDeviceRepository
+                    .findBySchoolIdAndRouteIdAndTimestampBetweenOrderByTimestampAsc(
+                            schoolId, routeId, noon, endOfDay);
+            return ResponseEntity.ok(rows);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Invalid date format. Use yyyy-MM-dd");
+        }
     }
 }
 

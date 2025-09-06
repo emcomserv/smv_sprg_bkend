@@ -13,6 +13,7 @@ public class UserResponseLtDTO {
     private Long id;
     private String username;
     private String phone;
+    private String email;
     private String status;
 }
 

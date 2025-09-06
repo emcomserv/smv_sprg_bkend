@@ -12,6 +12,8 @@ public class StudentResponseLtDTO {
     private Long parentId;
     private String parentFirstName;
     private String parentLastName;
+    private String parentUsername;
+    private String smParentId;
     private Long routeId;
     private String schoolId;
     private String routeName;

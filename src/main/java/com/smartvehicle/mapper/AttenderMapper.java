@@ -10,9 +10,10 @@ import java.util.List;
 @Mapper(componentModel = "spring", uses = {UserMapper.class})
 public interface AttenderMapper {
     @Mapping(target = "routeId", source = "route.id")
+    @Mapping(target = "routeName", source = "route.routeName")
     @Mapping(target = "smRouteId", source = "route.smRouteId")
     @Mapping(target = "schoolId", source = "school.id")
-    @Mapping(target = "user.username", source = "user.username")
+    @Mapping(target = "schoolName", source = "school.name")
     @Mapping(target = "phone", source = "user.phone")
     AttenderResponseDTO toResponseDTO(Attender attender);
     List<AttenderResponseDTO> toResponseDTO(List<Attender> attenders);

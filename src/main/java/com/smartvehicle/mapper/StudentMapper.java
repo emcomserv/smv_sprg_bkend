@@ -18,6 +18,8 @@ public interface StudentMapper {
     @Mapping(target = "schoolName", source = "school.name")
     @Mapping(target = "parentFirstName", source = "parent.firstName")
     @Mapping(target = "parentLastName", source = "parent.lastName")
+    @Mapping(target = "parentUsername", source = "parent.user.username")
+    @Mapping(target = "smParentId", source = "parent.smParentId")
     @Mapping(target = "routePointId", source = "routePoint.id")
     StudentResponseDTO toResponseDTO(Student student);
 
@@ -26,6 +28,10 @@ public interface StudentMapper {
     @Mapping(target = "schoolId", source = "school.id")
     @Mapping(target = "routeName", source = "route.routeName")
     @Mapping(target = "schoolName", source = "school.name")
+    @Mapping(target = "parentFirstName", source = "parent.firstName")
+    @Mapping(target = "parentLastName", source = "parent.lastName")
+    @Mapping(target = "parentUsername", source = "parent.user.username")
+    @Mapping(target = "smParentId", source = "parent.smParentId")
     StudentResponseLtDTO toResponseLtDTO(Student student);
 
     List<StudentResponseDTO> toResponseDTO(List<Student> student);

@@ -11,7 +11,9 @@ public class DriverResponseDTO {
     private String lastName;
     private UserResponseLtDTO user;
     private Long routeId;
+    private String routeName;
     private String schoolId;
+    private String schoolName;
     private String smDriverId;
 }
 

@@ -12,6 +12,8 @@ public class StudentResponseDTO {
     private Long parentId;
     private String parentFirstName;
     private String parentLastName;
+    private String parentUsername;
+    private String smParentId;
     private Integer age;
     private String gender;
     private Boolean status;
