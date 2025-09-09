@@ -10,11 +10,14 @@ public class SwipeStudentSummaryDTO {
     private String longitude;
     private LocalDateTime timestamp;
     private String reserv;
+    private String routePointName;
+    private String source; // "device" or "mobile"
 
     public SwipeStudentSummaryDTO() {}
 
     public SwipeStudentSummaryDTO(String schoolId, String routeId, String studentId,
-                                  String latitude, String longitude, LocalDateTime timestamp, String reserv) {
+                                  String latitude, String longitude, LocalDateTime timestamp, String reserv,
+                                  String routePointName, String source) {
         this.schoolId = schoolId;
         this.routeId = routeId;
         this.studentId = studentId;
@@ -22,6 +25,8 @@ public class SwipeStudentSummaryDTO {
         this.longitude = longitude;
         this.timestamp = timestamp;
         this.reserv = reserv;
+        this.routePointName = routePointName;
+        this.source = source;
     }
 
     public String getSchoolId() { return schoolId; }
@@ -38,6 +43,10 @@ public class SwipeStudentSummaryDTO {
     public void setTimestamp(LocalDateTime timestamp) { this.timestamp = timestamp; }
     public String getReserv() { return reserv; }
     public void setReserv(String reserv) { this.reserv = reserv; }
+    public String getRoutePointName() { return routePointName; }
+    public void setRoutePointName(String routePointName) { this.routePointName = routePointName; }
+    public String getSource() { return source; }
+    public void setSource(String source) { this.source = source; }
 }
 
 

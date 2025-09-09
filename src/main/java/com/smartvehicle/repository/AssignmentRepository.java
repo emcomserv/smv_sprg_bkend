@@ -24,6 +24,18 @@ public interface AssignmentRepository extends JpaRepository<Assignment, Long> {
     Optional<Assignment> findByDriver_IdAndAssignmentDate(Long driverId, LocalDate assignmentDate);
 
     Optional<Assignment> findByAttender_IdAndAssignmentDate(Long attenderId, LocalDate assignmentDate);
+
+    // Find active assignments for a given school and date
+    @Query("select a from Assignment a where a.school.id = ?1 and a.assignmentDate <= ?2 and (a.endDate is null or a.endDate >= ?2)")
+    List<Assignment> findActiveBySchoolAndDate(String schoolId, LocalDate date);
+
+    // Find overlapping assignments for a driver on a date range
+    @Query("select a from Assignment a where a.driver.id = ?1 and a.assignmentDate <= ?3 and (a.endDate is null or a.endDate >= ?2)")
+    List<Assignment> findDriverOverlaps(Long driverId, LocalDate start, LocalDate end);
+
+    // Find overlapping assignments for an attender on a date range
+    @Query("select a from Assignment a where a.attender.id = ?1 and a.assignmentDate <= ?3 and (a.endDate is null or a.endDate >= ?2)")
+    List<Assignment> findAttenderOverlaps(Long attenderId, LocalDate start, LocalDate end);
 }
 
 

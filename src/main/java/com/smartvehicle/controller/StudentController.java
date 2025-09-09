@@ -60,6 +60,8 @@ public class StudentController {
     @Autowired
     private RouteRepository routeRepository;
     @Autowired
+    private RoutePointRepository routePointRepository;
+    @Autowired
     private SimpMessagingTemplate messagingTemplate;
     @Autowired
     private SimpUserRegistry simpUserRegistry;
@@ -119,6 +121,20 @@ public class StudentController {
         List<Student> students = studentRepository.findAllByRoute_Id(id);
         List<StudentResponseDTO> studentResponseDTOS = studentMapper.toResponseDTO(students);
         return ResponseEntity.ok(studentResponseDTOS);
+    }
+
+    @GetMapping("/by-school-route-point")
+    public ResponseEntity<List<StudentResponseLtDTO>> getBySchoolRoutePoint(
+            @RequestParam String schoolId,
+            @RequestParam String routeSmId,
+            @RequestParam String routePointSmId) {
+        Route route = routeRepository.findBySmRouteId(routeSmId)
+                .orElseThrow(() -> new RuntimeException("Route not found: " + routeSmId));
+        RoutePoint routePoint = routePointRepository.findBySmRoutePointId(routePointSmId)
+                .orElseThrow(() -> new RuntimeException("RoutePoint not found: " + routePointSmId));
+        List<Student> students = studentRepository.findAllBySchool_IdAndRoute_IdAndRoutePoint_Id(schoolId, route.getId(), routePoint.getId());
+        List<StudentResponseLtDTO> response = studentMapper.toResponseLtDTO(students);
+        return ResponseEntity.ok(response);
     }
 
     // New: fetch students by external route ID (smRouteId), e.g. RT7F0001

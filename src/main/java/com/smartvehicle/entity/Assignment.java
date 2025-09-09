@@ -34,6 +34,9 @@ public class Assignment extends BaseEntity {
 
     @Column(name = "assignment_date", nullable = false)
     private LocalDate assignmentDate;
+
+    @Column(name = "end_date")
+    private LocalDate endDate; // inclusive end; null means still active
 }
 
 

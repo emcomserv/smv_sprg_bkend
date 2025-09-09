@@ -86,7 +86,8 @@ public class SwipeStudentDeviceController {
         }
         
         List<SwipeStudentSummaryDTO> resp = rows.stream().map(s -> new SwipeStudentSummaryDTO(
-                s.getSchoolId(), s.getRouteId(), s.getStudentId(), s.getLatitude(), s.getLongitude(), s.getTimestamp(), s.getReserv()
+                s.getSchoolId(), s.getRouteId(), s.getStudentId(), s.getLatitude(), s.getLongitude(), s.getTimestamp(), s.getReserv(),
+                resolveRoutePointName(s.getStudentId()), resolveSource(s.getReserv())
         )).collect(Collectors.toList());
         if (resp.isEmpty()) {
             return ResponseEntity.status(404).body("No swipe records found for the given criteria");
@@ -105,7 +106,8 @@ public class SwipeStudentDeviceController {
         List<SwipeStudentDevice> rows = swipeStudentDeviceRepository
                 .findLatestSwipesPerStudentBySchoolRouteAndDateRange(schoolId, routeId, startDt, endDt);
         List<SwipeStudentSummaryDTO> resp = rows.stream().map(s -> new SwipeStudentSummaryDTO(
-                s.getSchoolId(), s.getRouteId(), s.getStudentId(), s.getLatitude(), s.getLongitude(), s.getTimestamp(), s.getReserv()
+                s.getSchoolId(), s.getRouteId(), s.getStudentId(), s.getLatitude(), s.getLongitude(), s.getTimestamp(), s.getReserv(),
+                resolveRoutePointName(s.getStudentId()), resolveSource(s.getReserv())
         )).collect(Collectors.toList());
         return ResponseEntity.ok(resp);
     }
@@ -193,7 +195,8 @@ public class SwipeStudentDeviceController {
         }
 
         List<SwipeStudentSummaryDTO> resp = rows.stream().map(s -> new SwipeStudentSummaryDTO(
-                s.getSchoolId(), s.getRouteId(), s.getStudentId(), s.getLatitude(), s.getLongitude(), s.getTimestamp(), s.getReserv()
+                s.getSchoolId(), s.getRouteId(), s.getStudentId(), s.getLatitude(), s.getLongitude(), s.getTimestamp(), s.getReserv(),
+                resolveRoutePointName(s.getStudentId()), resolveSource(s.getReserv())
         )).collect(Collectors.toList());
         if (resp.isEmpty()) {
             return ResponseEntity.status(404).body("No swipe records found for the given criteria");
@@ -293,7 +296,8 @@ public class SwipeStudentDeviceController {
             List<SwipeStudentSummaryDTO> resp = eveningSwipes.stream()
                     .map(s -> new SwipeStudentSummaryDTO(
                             s.getSchoolId(), s.getRouteId(), s.getStudentId(),
-                            s.getLatitude(), s.getLongitude(), s.getTimestamp(), s.getReserv()
+                            s.getLatitude(), s.getLongitude(), s.getTimestamp(), s.getReserv(),
+                            resolveRoutePointName(s.getStudentId()), resolveSource(s.getReserv())
                     ))
                     .collect(Collectors.toList());
 
@@ -399,7 +403,8 @@ public class SwipeStudentDeviceController {
             List<SwipeStudentSummaryDTO> resp = morningSwipes.stream()
                     .map(s -> new SwipeStudentSummaryDTO(
                             s.getSchoolId(), s.getRouteId(), s.getStudentId(),
-                            s.getLatitude(), s.getLongitude(), s.getTimestamp(), s.getReserv()
+                            s.getLatitude(), s.getLongitude(), s.getTimestamp(), s.getReserv(),
+                            resolveRoutePointName(s.getStudentId()), resolveSource(s.getReserv())
                     ))
                     .collect(Collectors.toList());
 
@@ -469,7 +474,8 @@ public class SwipeStudentDeviceController {
         }
 
         List<SwipeStudentSummaryDTO> resp = rows.stream().map(s -> new SwipeStudentSummaryDTO(
-                s.getSchoolId(), s.getRouteId(), s.getStudentId(), s.getLatitude(), s.getLongitude(), s.getTimestamp(), s.getReserv()
+                s.getSchoolId(), s.getRouteId(), s.getStudentId(), s.getLatitude(), s.getLongitude(), s.getTimestamp(), s.getReserv(),
+                resolveRoutePointName(s.getStudentId()), resolveSource(s.getReserv())
         )).collect(Collectors.toList());
 
         if (resp.isEmpty()) {
@@ -661,6 +667,26 @@ public class SwipeStudentDeviceController {
     private boolean isValidResultFilter(String r) {
         if ("matched".equalsIgnoreCase(r) || "mismatched".equalsIgnoreCase(r) || "duplicate".equalsIgnoreCase(r)) return true;
         return r.length() == 2 && r.chars().allMatch(Character::isDigit) && r.charAt(0) == '0' && r.charAt(1) >= '0' && r.charAt(1) <= '7';
+    }
+
+    private String resolveRoutePointName(String smStudentId) {
+        try {
+            Student student = studentRepository.findBySmStudentId(smStudentId).orElse(null);
+            if (student != null && student.getRoutePoint() != null) {
+                RoutePoint rp = student.getRoutePoint();
+                return rp.getRoutePointName() != null ? rp.getRoutePointName() : rp.getTitle();
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    private String resolveSource(String reserv) {
+        if (reserv == null) return null;
+        // Device pattern: ...AAA (ends with AAA)
+        // Mobile pattern: ...AA1 (ends with AA1)
+        if (reserv.endsWith("AA1")) return "mobile";
+        if (reserv.endsWith("AAA")) return "device";
+        return null;
     }
 
     // New: Fetch all rows for a school+route on a particular date BEFORE 12:00 (morning)
