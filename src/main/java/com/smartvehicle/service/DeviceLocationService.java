@@ -18,9 +18,19 @@ public class DeviceLocationService {
     @Autowired
     private DeviceLocationRepository deviceLocationRepository;
 
-    public List<DeviceLocationResponse> getBySchoolRouteAndDate(String schoolId, String routeId, LocalDate date) {
-        LocalDateTime start = date.atStartOfDay();
-        LocalDateTime end = LocalDateTime.of(date, LocalTime.MAX);
+    public List<DeviceLocationResponse> getBySchoolRouteAndDate(String schoolId, String routeId, LocalDate date, String period) {
+        LocalDateTime start;
+        LocalDateTime end;
+        if (period != null && period.equalsIgnoreCase("morning")) {
+            start = date.atStartOfDay();
+            end = date.atTime(11, 59, 59, 999_999_999);
+        } else if (period != null && period.equalsIgnoreCase("evening")) {
+            start = date.atTime(12, 0);
+            end = LocalDateTime.of(date, LocalTime.MAX);
+        } else {
+            start = date.atStartOfDay();
+            end = LocalDateTime.of(date, LocalTime.MAX);
+        }
         List<DeviceLocation> list = deviceLocationRepository
                 .findBySchoolIdAndRouteIdAndEventTimeBetweenOrderByEventTimeAsc(schoolId, routeId, start, end);
         List<DeviceLocationResponse> out = new ArrayList<>();

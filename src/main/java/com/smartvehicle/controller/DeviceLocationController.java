@@ -24,9 +24,10 @@ public class DeviceLocationController {
     public ResponseEntity<List<DeviceLocationResponse>> getBySchoolRouteAndDate(
             @RequestParam String schoolId,
             @RequestParam String routeId,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(name = "period", required = false) String period
     ) {
-        return ResponseEntity.ok(deviceLocationService.getBySchoolRouteAndDate(schoolId, routeId, date));
+        return ResponseEntity.ok(deviceLocationService.getBySchoolRouteAndDate(schoolId, routeId, date, period));
     }
 }
 
