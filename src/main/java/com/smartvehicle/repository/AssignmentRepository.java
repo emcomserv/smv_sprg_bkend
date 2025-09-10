@@ -21,6 +21,9 @@ public interface AssignmentRepository extends JpaRepository<Assignment, Long> {
     @Query("select a from Assignment a where a.school.id = ?1 and a.route.smRouteId = ?2 and a.assignmentDate = ?3")
     Optional<Assignment> findBySchoolIdAndSmRouteIdAndDate(String schoolId, String smRouteId, LocalDate date);
 
+    @Query("select a from Assignment a where a.school.id = ?1 and a.route.smRouteId = ?2 and a.assignmentDate = ?3")
+    List<Assignment> findAllBySchoolIdAndSmRouteIdAndDate(String schoolId, String smRouteId, LocalDate date);
+
     Optional<Assignment> findByDriver_IdAndAssignmentDate(Long driverId, LocalDate assignmentDate);
 
     Optional<Assignment> findByAttender_IdAndAssignmentDate(Long attenderId, LocalDate assignmentDate);

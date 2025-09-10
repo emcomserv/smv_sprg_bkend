@@ -19,6 +19,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.PathVariable;
 
+import com.smartvehicle.service.FTPClientService;
+import java.io.IOException;
+import java.util.Base64;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -35,16 +38,19 @@ public class SwipeStudentDeviceController {
     private SwipeStudentDeviceRepository swipeStudentDeviceRepository;
     
     @Autowired
-    private RouteSchlStudentMappingRepo routeSchlStudentMappingRepo;
+    private RouteSchlStudentMappingRepo routeSchlStudentMappingRepo; // kept for other endpoints
     
     @Autowired
-    private RoutePointRepository routePointRepository;
+    private RoutePointRepository routePointRepository; // kept for other endpoints
     
     @Autowired
     private StudentRepository studentRepository;
     
     @Autowired
     private RouteRepository routeRepository;
+
+    @Autowired
+    private FTPClientService ftpService;
 
     @GetMapping("/ids")
     public ResponseEntity<?> getDistinctStudentIds(
@@ -687,6 +693,99 @@ public class SwipeStudentDeviceController {
         if (reserv.endsWith("AA1")) return "mobile";
         if (reserv.endsWith("AAA")) return "device";
         return null;
+    }
+
+    @GetMapping("/image/first")
+    public ResponseEntity<byte[]> getFirstImageFromFtp(
+            @RequestParam String schoolId,
+            @RequestParam String routeId,
+            @RequestParam String studentId) {
+        try {
+            String relativeDir = schoolId + "/" + routeId + "/" + studentId;
+            java.util.List<String> files = ftpService.listFilesInDirectory(relativeDir);
+            if (files == null || files.isEmpty()) {
+                return ResponseEntity.notFound().build();
+            }
+
+            files.sort(String::compareTo);
+            String first = null;
+            for (String name : files) {
+                String lower = name.toLowerCase();
+                if (lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png")) {
+                    first = name;
+                    break;
+                }
+            }
+            if (first == null) {
+                return ResponseEntity.notFound().build();
+            }
+
+            String format = first.substring(first.lastIndexOf('.') + 1);
+            String relativePathWithFile = relativeDir + "/" + first;
+            byte[] data = ftpService.readFile(relativePathWithFile);
+
+            return ResponseEntity.ok()
+                    .header("Content-Type", contentTypeFor(format))
+                    .header("Content-Disposition", "inline; filename=\"" + first + "\"")
+                    .body(data);
+        } catch (IOException e) {
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+    private String contentTypeFor(String format) {
+        String f = format == null ? "" : format.toLowerCase();
+        switch (f) {
+            case "jpg":
+            case "jpeg":
+                return "image/jpeg";
+            case "png":
+                return "image/png";
+            case "mp4":
+                return "video/mp4";
+            default:
+                return "application/octet-stream";
+        }
+    }
+
+    @GetMapping("/image/first/base64")
+    public ResponseEntity<?> getFirstImageFromFtpAsBase64(
+            @RequestParam String schoolId,
+            @RequestParam String routeId,
+            @RequestParam String studentId) {
+        try {
+            String relativeDir = schoolId + "/" + routeId + "/" + studentId;
+            java.util.List<String> files = ftpService.listFilesInDirectory(relativeDir);
+            if (files == null || files.isEmpty()) {
+                return ResponseEntity.status(404).body("No image found");
+            }
+
+            files.sort(String::compareTo);
+            String first = null;
+            for (String name : files) {
+                String lower = name.toLowerCase();
+                if (lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png")) {
+                    first = name;
+                    break;
+                }
+            }
+            if (first == null) {
+                return ResponseEntity.status(404).body("No image found");
+            }
+
+            String format = first.substring(first.lastIndexOf('.') + 1);
+            String relativePathWithFile = relativeDir + "/" + first;
+            byte[] data = ftpService.readFile(relativePathWithFile);
+
+            String base64 = Base64.getEncoder().encodeToString(data);
+            java.util.Map<String, Object> resp = new java.util.HashMap<>();
+            resp.put("filename", first);
+            resp.put("contentType", contentTypeFor(format));
+            resp.put("base64", base64);
+            return ResponseEntity.ok(resp);
+        } catch (IOException e) {
+            return ResponseEntity.status(500).body("Failed to read image: " + e.getMessage());
+        }
     }
 
     // New: Fetch all rows for a school+route on a particular date BEFORE 12:00 (morning)

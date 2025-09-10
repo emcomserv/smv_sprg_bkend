@@ -15,11 +15,11 @@ public class AssignmentCreateReq {
     private String schoolId; // sm school id
 
     @NotBlank
-    private String routeSmId; // sm route id
+    private String smRouteId; // sm route id
 
-    private String driverSmId; // optional
+    private String smDriverID; // optional
 
-    private String attenderSmId; // optional
+    private String smAttenderId; // optional
 
     @NotNull
     private LocalDate date; // assignment date

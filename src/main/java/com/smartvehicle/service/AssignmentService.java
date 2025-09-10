@@ -11,7 +11,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
-import java.util.Optional;
 import org.springframework.http.HttpStatus;
 
 @Service
@@ -33,32 +32,29 @@ public class AssignmentService {
         School school = schoolRepository.findById(req.getSchoolId())
                 .orElseThrow(() -> new RuntimeException("School not found: " + req.getSchoolId()));
 
-        Route route = routeRepository.findBySmRouteId(req.getRouteSmId())
-                .orElseThrow(() -> new RuntimeException("Route not found: " + req.getRouteSmId()));
+        Route route = routeRepository.findBySmRouteId(req.getSmRouteId())
+                .orElseThrow(() -> new RuntimeException("Route not found: " + req.getSmRouteId()));
 
         Driver driver = null;
-        if (req.getDriverSmId() != null && !req.getDriverSmId().isEmpty()) {
-            driver = driverRepository.findBySmDriverId(req.getDriverSmId())
-                    .orElseThrow(() -> new RuntimeException("Driver not found: " + req.getDriverSmId()));
+        if (req.getSmDriverID() != null && !req.getSmDriverID().isEmpty()) {
+            driver = driverRepository.findBySmDriverId(req.getSmDriverID())
+                    .orElseThrow(() -> new RuntimeException("Driver not found: " + req.getSmDriverID()));
             // Block any assignment for this driver on the same date (regardless of route)
             assignmentRepository.findByDriver_IdAndAssignmentDate(driver.getId(), req.getDate())
                     .ifPresent(existing -> { throw new ApplicationException("Driver already assigned for this date", HttpStatus.CONFLICT); });
         }
 
         Attender attender = null;
-        if (req.getAttenderSmId() != null && !req.getAttenderSmId().isEmpty()) {
-            attender = attenderRepository.findBySmAttenderId(req.getAttenderSmId())
-                    .orElseThrow(() -> new RuntimeException("Attender not found: " + req.getAttenderSmId()));
+        if (req.getSmAttenderId() != null && !req.getSmAttenderId().isEmpty()) {
+            attender = attenderRepository.findBySmAttenderId(req.getSmAttenderId())
+                    .orElseThrow(() -> new RuntimeException("Attender not found: " + req.getSmAttenderId()));
             // Block any assignment for this attender on the same date (regardless of route)
             assignmentRepository.findByAttender_IdAndAssignmentDate(attender.getId(), req.getDate())
                     .ifPresent(existing -> { throw new ApplicationException("Attender already assigned for this date", HttpStatus.CONFLICT); });
         }
 
         LocalDate date = req.getDate();
-        Optional<Assignment> existingOpt = assignmentRepository.findBySchoolIdAndSmRouteIdAndDate(school.getId(), route.getSmRouteId(), date);
-        if (existingOpt.isPresent()) {
-            throw new ApplicationException("Assignment already exists for this school, route and date", HttpStatus.CONFLICT);
-        }
+        // Allow multiple assignments for the same route/date (multiple drivers/attenders)
 
         // Close previous active assignment for this driver or attender on or before this date
         if (driver != null) {
@@ -98,10 +94,13 @@ public class AssignmentService {
         return toResponse(assignment);
     }
 
-    public AssignmentResponse getBySchoolRouteDate(String schoolId, String routeSmId, LocalDate date) {
-        Assignment assignment = assignmentRepository.findBySchoolIdAndSmRouteIdAndDate(schoolId, routeSmId, date)
-                .orElseThrow(() -> new RuntimeException("Assignment not found"));
-        return toResponse(assignment);
+    public java.util.List<AssignmentResponse> getBySchoolRouteDate(String schoolId, String routeSmId, LocalDate date) {
+        java.util.List<Assignment> list = assignmentRepository.findAllBySchoolIdAndSmRouteIdAndDate(schoolId, routeSmId, date);
+        java.util.List<AssignmentResponse> out = new java.util.ArrayList<>();
+        for (Assignment a : list) {
+            out.add(toResponse(a));
+        }
+        return out;
     }
 
     public java.util.List<AssignmentResponse> getActiveBySchoolAndDate(String schoolId, LocalDate date) {
@@ -127,20 +126,20 @@ public class AssignmentService {
 
         // Resolve new route/driver/attender if provided, else use current
         Route newRoute = assignment.getRoute();
-        if (req.getRouteSmId() != null && !req.getRouteSmId().isEmpty()) {
-            newRoute = routeRepository.findBySmRouteId(req.getRouteSmId())
+        if (req.getSmRouteId() != null && !req.getSmRouteId().isEmpty()) {
+            newRoute = routeRepository.findBySmRouteId(req.getSmRouteId())
                     .orElseThrow(() -> new ApplicationException("Route not found", HttpStatus.NOT_FOUND));
         }
 
         Driver newDriver = assignment.getDriver();
-        if (req.getDriverSmId() != null && !req.getDriverSmId().isEmpty()) {
-            newDriver = driverRepository.findBySmDriverId(req.getDriverSmId())
+        if (req.getSmDriverID() != null && !req.getSmDriverID().isEmpty()) {
+            newDriver = driverRepository.findBySmDriverId(req.getSmDriverID())
                     .orElseThrow(() -> new ApplicationException("Driver not found", HttpStatus.NOT_FOUND));
         }
 
         Attender newAttender = assignment.getAttender();
-        if (req.getAttenderSmId() != null && !req.getAttenderSmId().isEmpty()) {
-            newAttender = attenderRepository.findBySmAttenderId(req.getAttenderSmId())
+        if (req.getSmAttenderId() != null && !req.getSmAttenderId().isEmpty()) {
+            newAttender = attenderRepository.findBySmAttenderId(req.getSmAttenderId())
                     .orElseThrow(() -> new ApplicationException("Attender not found", HttpStatus.NOT_FOUND));
         }
 

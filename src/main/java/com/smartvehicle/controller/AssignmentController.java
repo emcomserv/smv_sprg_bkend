@@ -26,13 +26,12 @@ public class AssignmentController {
     }
 
     @GetMapping
-    public ResponseEntity<AssignmentResponse> get(
+    public ResponseEntity<java.util.List<AssignmentResponse>> get(
             @RequestParam String schoolId,
             @RequestParam String routeSmId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
-        AssignmentResponse response = assignmentService.getBySchoolRouteDate(schoolId, routeSmId, date);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(assignmentService.getBySchoolRouteDate(schoolId, routeSmId, date));
     }
 
     @DeleteMapping("/{id}")

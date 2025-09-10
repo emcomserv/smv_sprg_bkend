@@ -5,19 +5,20 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class AssignmentResponse {
+public class DeviceLocationResponse {
     private Long id;
+    private String deviceId;
     private String schoolId;
-    private String smRouteId;
-    private String smDriverID;
-    private String smAttenderId;
-    private LocalDate date;
+    private String routeId;
+    private Double latitude;
+    private Double longitude;
+    private LocalDateTime eventTime;
 }
 
 
