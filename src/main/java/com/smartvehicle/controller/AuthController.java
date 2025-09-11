@@ -122,6 +122,10 @@ public class AuthController {
                         entityObj.setId(parent.getId());
                         entityObj.setFirstName(parent.getFirstName());
                         entityObj.setLastName(parent.getLastName());
+                        if (parent.getSchool() != null) {
+                            entityObj.setSchoolId(parent.getSchool().getId());
+                            entityObj.setSchoolName(parent.getSchool().getName());
+                        }
                         break;
                     case "DRIVER":
                         Driver driver = driverRepository.findByUser_Id(user.getId()).get();
@@ -142,6 +146,7 @@ public class AuthController {
                         entityObj.setLastName(admin.getLastName());
                         if (admin.getSchool() != null) {
                             entityObj.setSchoolId(admin.getSchool().getId());
+                            entityObj.setSchoolName(admin.getSchool().getName());
                         }
                         break;
                     default:

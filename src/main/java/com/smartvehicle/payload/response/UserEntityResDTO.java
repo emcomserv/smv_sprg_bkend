@@ -15,5 +15,6 @@ public class UserEntityResDTO {
     private String lastName;
     private String status;
     private String schoolId;
+    private String schoolName;
 }
 

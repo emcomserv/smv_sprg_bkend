@@ -23,6 +23,9 @@ public class AssignmentCreateReq {
 
     @NotNull
     private LocalDate date; // assignment date
+
+    @NotNull
+    private Integer status; // assignment status
 }
 
 

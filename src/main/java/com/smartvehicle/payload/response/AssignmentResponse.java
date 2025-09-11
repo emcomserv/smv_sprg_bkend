@@ -18,6 +18,7 @@ public class AssignmentResponse {
     private String smDriverID;
     private String smAttenderId;
     private LocalDate date;
+    private Integer status;
 }
 
 

@@ -37,6 +37,9 @@ public class Assignment extends BaseEntity {
 
     @Column(name = "end_date")
     private LocalDate endDate; // inclusive end; null means still active
+
+    @Column(name = "status", nullable = false)
+    private Integer status; // accepts only one specific value
 }
 
 

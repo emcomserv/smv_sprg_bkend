@@ -74,6 +74,7 @@ public class AssignmentService {
         assignment.setAttender(attender);
         assignment.setAssignmentDate(date);
         assignment.setEndDate(null);
+        assignment.setStatus(req.getStatus());
 
         assignment = assignmentRepository.save(assignment);
 
@@ -211,6 +212,9 @@ public class AssignmentService {
         assignment.setRoute(newRoute);
         assignment.setDriver(newDriver);
         assignment.setAttender(newAttender);
+        if (req.getStatus() != null) {
+            assignment.setStatus(req.getStatus());
+        }
         Assignment saved = assignmentRepository.save(assignment);
         return toResponse(saved);
     }
@@ -242,7 +246,8 @@ public class AssignmentService {
                 a.getRoute() != null ? a.getRoute().getSmRouteId() : null,
                 a.getDriver() != null ? a.getDriver().getSmDriverId() : null,
                 a.getAttender() != null ? a.getAttender().getSmAttenderId() : null,
-                a.getAssignmentDate()
+                a.getAssignmentDate(),
+                a.getStatus()
         );
     }
 }
