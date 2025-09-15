@@ -167,6 +167,28 @@ public class RouteController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping("/route-points")
+    public ResponseEntity<List<RoutePointResponseDTO>> getAllRoutePoints() {
+        List<RoutePoint> routePoints = routePointRepository.findAll();
+        List<RoutePointResponseDTO> response = routePointMapper.toResponseDTO(routePoints);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/route-point/by-id")
+    public ResponseEntity<RoutePointResponseDTO> getRoutePointBySmRoutePointId(@RequestParam String smRoutePointId) {
+        RoutePoint routePoint = routePointRepository.findBySmRoutePointId(smRoutePointId)
+                .orElseThrow(() -> new RuntimeException("RoutePoint not found with smRoutePointId: " + smRoutePointId));
+        RoutePointResponseDTO response = routePointMapper.toResponseDTO(routePoint);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/by-routeId")
+    public ResponseEntity<RouteResponseDTO> getRouteBySmRouteId(@RequestParam String smRouteId) {
+        Route route = routeService.getRouteBySmId(smRouteId);
+        RouteResponseDTO routeResponseDTO = routeMapper.toResponseDTO(route);
+        return ResponseEntity.ok(routeResponseDTO);
+    }
+
 }
 
 

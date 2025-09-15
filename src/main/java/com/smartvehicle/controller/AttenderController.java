@@ -105,6 +105,14 @@ public class AttenderController {
         return ResponseEntity.ok(attenderResponseDTO);
     }
 
+    @GetMapping("/by-attenderId")
+    public ResponseEntity<AttenderResponseDTO> getBySmAttenderId(@RequestParam String smAttenderId) {
+        Attender attender = attenderRepository.findBySmAttenderId(smAttenderId)
+                .orElseThrow(() -> new RuntimeException("Error: Attender not found with smAttenderId  " + smAttenderId));
+        AttenderResponseDTO attenderResponseDTO = attenderMapper.toResponseDTO(attender);
+        return ResponseEntity.ok(attenderResponseDTO);
+    }
+
     // Returns ["ST6F0001","ST6F0004",...]
     @GetMapping("/students")
     public ResponseEntity<StudentIdListResponse> getStudentsBySchoolAndSmRoute(

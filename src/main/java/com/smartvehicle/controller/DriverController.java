@@ -106,6 +106,14 @@ public class DriverController {
         return ResponseEntity.ok(driverResponseDTO);
     }
 
+    @GetMapping("/by-driverId")
+    public ResponseEntity<DriverResponseDTO> getBySmDriverId(@RequestParam String smDriverId) {
+        Driver driver = driverRepository.findBySmDriverId(smDriverId)
+                .orElseThrow(() -> new RuntimeException("Error: Driver not found with smDriverId  " + smDriverId));
+        DriverResponseDTO driverResponseDTO = driverMapper.toResponseDTO(driver);
+        return ResponseEntity.ok(driverResponseDTO);
+    }
+
     @PutMapping("/update/{id}")
     @Transactional
     public ResponseEntity<?> updateDriverInfo(@PathVariable String id, @Valid @RequestBody DriverUpdateReq updateReq) {

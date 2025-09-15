@@ -98,6 +98,13 @@ public class AdminController {
         return ResponseEntity.ok(adminResponseDTOS);
     }
 
+    @GetMapping
+    public ResponseEntity<List<AdminResponseDTO>> getAllAdmins() {
+        List<Admin> admins = adminRepository.findAll();
+        List<AdminResponseDTO> response = adminMapper.toResponseDTO(admins);
+        return ResponseEntity.ok(response);
+    }
+
     @GetMapping("/school/{schoolId}")
     public ResponseEntity<?> getAdminBySchoolId(@PathVariable String schoolId) {
         List<Admin> admins  = adminRepository.findBySchool_Id(schoolId);
@@ -109,6 +116,14 @@ public class AdminController {
     public ResponseEntity<?> getById(@PathVariable Long adminId) {
         Admin admin  = adminRepository.findById(adminId)
                 .orElseThrow(() ->  new RuntimeException("Admin not found with ID "+adminId));
+        AdminResponseDTO adminResponseDTO = adminMapper.toResponseDTO(admin);
+        return ResponseEntity.ok(adminResponseDTO);
+    }
+    
+    @GetMapping("/by-adminId")
+    public ResponseEntity<AdminResponseDTO> getBySmAdminId(@RequestParam String smAdminId) {
+        Admin admin = adminRepository.findBySmAdminId(smAdminId)
+                .orElseThrow(() -> new RuntimeException("Admin not found with smAdminId: " + smAdminId));
         AdminResponseDTO adminResponseDTO = adminMapper.toResponseDTO(admin);
         return ResponseEntity.ok(adminResponseDTO);
     }

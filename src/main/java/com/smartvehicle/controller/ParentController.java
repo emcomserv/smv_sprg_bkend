@@ -140,4 +140,11 @@ public class ParentController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping("/all")
+    public ResponseEntity<List<ParentResponseDTO>> getAllParents() {
+        List<Parent> parents = parentRepository.findAll();
+        List<ParentResponseDTO> response = parentMapper.toResponseDTO(parents);
+        return ResponseEntity.ok(response);
+    }
+
 }
