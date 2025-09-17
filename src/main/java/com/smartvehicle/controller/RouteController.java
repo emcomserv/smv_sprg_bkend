@@ -39,14 +39,25 @@ public class RouteController {
     private SchoolRepository schoolRepository;
     @Autowired
     private RouteRepository routeRepository;
+    @Autowired
+    private com.smartvehicle.service.SmIdGeneratorService smIdGeneratorService;
 
     @PostMapping("/register")
     public ResponseEntity<RouteRegResDTO> registerRoute(@Valid @RequestBody RouteRegistrationReq request) {
+            // Auto-generate smRouteId if missing
+            if (request.getSmRouteId() == null || request.getSmRouteId().isEmpty()) {
+                String gen = smIdGeneratorService.generateRouteId(request.getSchoolId());
+                request.setSmRouteId(gen);
+            }
             RouteRegResDTO response = routeService.registerRoute(request);
             return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
     @PostMapping("/route-point/register")
     public ResponseEntity<RoutePointResponseDTO> registerRoutePoint(@Valid @RequestBody RoutePointRegistrationReq request) {
+        if (request.getSmRoutePointId() == null || request.getSmRoutePointId().isEmpty()) {
+            String gen = smIdGeneratorService.generateRoutePointId(request.getSchoolId());
+            request.setSmRoutePointId(gen);
+        }
         RoutePoint routePoint = routeService.registerRoutePoint(request);
 
         RoutePointResponseDTO routePointResponseDTO = routePointMapper.toResponseDTO(routePoint);

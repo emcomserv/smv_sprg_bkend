@@ -45,6 +45,8 @@ public class ParentController {
     private StudentMapper studentMapper;
     @Autowired
     private ParentMapper parentMapper;
+    @Autowired
+    private com.smartvehicle.service.SmIdGeneratorService smIdGeneratorService;
     @PostMapping("/register")
     public ResponseEntity<?> registerUser(@Valid @RequestBody ParentSignupReq request) throws Exception{
         // Check for duplicate smParentId
@@ -62,7 +64,10 @@ public class ParentController {
         parent.setLastName(request.getLastName());
         parent.setSchool(school);
         parent.setCountryCode(request.getCountryCode());
-        parent.setSmParentId(request.getSmParentId());
+        String smParentId = request.getSmParentId() != null && !request.getSmParentId().isEmpty()
+                ? request.getSmParentId()
+                : smIdGeneratorService.generateParentId(request.getSchoolId());
+        parent.setSmParentId(smParentId);
         parentRepository.save(parent);
         SignupResponse response = new SignupResponse(request.getUsername(), request.getPhone());
         return new ResponseEntity<SignupResponse>(response, HttpStatus.CREATED);

@@ -39,6 +39,8 @@ public class DriverController {
     private RouteService routeService;
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private com.smartvehicle.service.SmIdGeneratorService smIdGeneratorService;
     @PostMapping("/register")
     @Transactional
     public ResponseEntity<?> registerUser(@Valid @RequestBody DriverSignupReq request) throws Exception{
@@ -57,13 +59,16 @@ public class DriverController {
         driver.setFirstName(request.getFirstName());
         driver.setLastName(request.getLastName());
         driver.setSchool(school);
-        driver.setSmDriverId(request.getSmDriverId());
+        String smDriverId = request.getSmDriverId() != null && !request.getSmDriverId().isEmpty()
+                ? request.getSmDriverId()
+                : smIdGeneratorService.generateDriverId(request.getSchoolId());
+        driver.setSmDriverId(smDriverId);
         if(request.getRouteId()!=null) {
             Route route = routeService.getRouteById(request.getRouteId());
             driver.setRoute(route);
         }
 
-        driver.setSmDriverId(request.getSmDriverId());
+        driver.setSmDriverId(smDriverId);
         driverRepository.save(driver);
         SignupResponse response = new SignupResponse(request.getUsername(), request.getPhone());
         return new ResponseEntity<SignupResponse>(response, HttpStatus.CREATED);

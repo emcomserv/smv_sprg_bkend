@@ -53,6 +53,11 @@ public class AssignmentService {
                     .ifPresent(existing -> { throw new ApplicationException("Attender already assigned for this date", HttpStatus.CONFLICT); });
         }
 
+        // Ensure at least one of driver or attender is provided
+        if (driver == null && attender == null) {
+            throw new ApplicationException("Either driver or attender must be provided", HttpStatus.BAD_REQUEST);
+        }
+
         LocalDate date = req.getDate();
         // Allow multiple assignments for the same route/date (multiple drivers/attenders)
 
@@ -142,6 +147,11 @@ public class AssignmentService {
         if (req.getSmAttenderId() != null && !req.getSmAttenderId().isEmpty()) {
             newAttender = attenderRepository.findBySmAttenderId(req.getSmAttenderId())
                     .orElseThrow(() -> new ApplicationException("Attender not found", HttpStatus.NOT_FOUND));
+        }
+
+        // Ensure the updated assignment has at least one of driver or attender
+        if (newDriver == null && newAttender == null) {
+            throw new ApplicationException("Either driver or attender must be provided", HttpStatus.BAD_REQUEST);
         }
 
         // Validate overlaps at the effective start date

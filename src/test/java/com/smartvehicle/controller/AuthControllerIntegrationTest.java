@@ -71,7 +71,7 @@ class AuthControllerIntegrationTest {
     void setUp() {
         // Create test school with all required fields
         School school = new School();
-        school.setId("SCH001");
+        school.setId("SC1F0001");
         school.setName("Test School");
         school.setCountryId("001");
         school.setProvId("001");
@@ -87,12 +87,12 @@ class AuthControllerIntegrationTest {
         // Create test roles
         Role superAdminRole = new Role();
         superAdminRole.setName("SUPERADMIN");
-        superAdminRole.setSchId("SCH001");
+        superAdminRole.setSchId("SC1F0001");
         roleRepository.save(superAdminRole);
 
         Role parentRole = new Role();
         parentRole.setName("PARENT");
-        parentRole.setSchId("SCH001");
+        parentRole.setSchId("SC1F0001");
         roleRepository.save(parentRole);
 
         // Create test user
@@ -133,13 +133,13 @@ class AuthControllerIntegrationTest {
         request.setEmail("parent_email@test.com");
         request.setPhone("1234567890");
         request.setCountryCode("+1");
-        request.setSchoolId("SCH001");
+        request.setSchoolId("SC1F0001");
         return request;
     }
 
     @Test
     void testSchoolSchema() {
-        School school = schoolRepository.findById("SCH001").orElseThrow();
+        School school = schoolRepository.findById("SC1F0001").orElseThrow();
         assertNotNull(school);
         assertEquals("Test School", school.getName());
     }

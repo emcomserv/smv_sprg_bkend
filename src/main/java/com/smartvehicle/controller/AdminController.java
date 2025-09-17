@@ -42,6 +42,8 @@ public class AdminController {
     private AdminMapper adminMapper ;
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private com.smartvehicle.service.SmIdGeneratorService smIdGeneratorService;
 
     @PostMapping("/register")
     @Transactional
@@ -67,7 +69,10 @@ public class AdminController {
         admin.setFirstName(request.getFirstName());
         admin.setLastName(request.getLastName());
         admin.setSchool(school);
-        admin.setSmAdminId(request.getSmAdminId());
+        String smAdminId = request.getSmAdminId() != null && !request.getSmAdminId().isEmpty()
+                ? request.getSmAdminId()
+                : smIdGeneratorService.generateAdminId(request.getSchoolId());
+        admin.setSmAdminId(smAdminId);
         adminRepository.save(admin);
 
         SignupResponse response = new SignupResponse(request.getUsername(), request.getPhone());

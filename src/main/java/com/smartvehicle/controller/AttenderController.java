@@ -44,6 +44,8 @@ public class AttenderController {
     private StudentRepository studentRepository;
     @Autowired
     private FTPClientService ftpClientService;
+    @Autowired
+    private com.smartvehicle.service.SmIdGeneratorService smIdGeneratorService;
 
     @PostMapping("/register")
     public ResponseEntity<?> registerUser(@Valid @RequestBody AttenderSignupReq request) throws Exception{
@@ -56,13 +58,19 @@ public class AttenderController {
         School school = schoolRepository.findById(request.getSchoolId())
                 .orElseThrow(() -> new RuntimeException("Error: School not found with id  "+request.getSchoolId()));
         User user = userService.registerUser(request, UserType.ATTENDER.name(),false);
-        Route route = routeService.getRouteById(request.getRouteId());
         Attender attender = new Attender();
         attender.setUser(user);
         attender.setFirstName(request.getFirstName());
         attender.setLastName(request.getLastName());
         attender.setSchool(school);
-        attender.setSmAttenderId(request.getSmAttenderId());
+        String smAttenderId = request.getSmAttenderId() != null && !request.getSmAttenderId().isEmpty()
+                ? request.getSmAttenderId()
+                : smIdGeneratorService.generateAttenderId(request.getSchoolId());
+        attender.setSmAttenderId(smAttenderId);
+        if (request.getRouteId() != null) {
+            Route route = routeService.getRouteById(request.getRouteId());
+            attender.setRoute(route);
+        }
         attenderRepository.save(attender);
         SignupResponse response = new SignupResponse(request.getUsername(), request.getPhone());
         return new ResponseEntity<SignupResponse>(response, HttpStatus.CREATED);

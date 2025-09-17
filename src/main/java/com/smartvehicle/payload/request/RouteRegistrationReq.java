@@ -18,7 +18,6 @@ public class RouteRegistrationReq {
 
     private Integer reserve;
 
-    @NotBlank(message = "SM Route ID is required")
     private String smRouteId;
 
     private String content;

@@ -16,6 +16,7 @@ public interface RoutePointRepository extends JpaRepository<RoutePoint, Long> {
     Optional<RoutePoint> findBySmRoutePointId(String routePointId);
     List<RoutePoint> findByRoute_Id(Long routeId);
     List<RoutePoint> findByRoute_SmRouteId(String smRouteId);
+    List<RoutePoint> findBySchId(String schoolId);
 
 }
 

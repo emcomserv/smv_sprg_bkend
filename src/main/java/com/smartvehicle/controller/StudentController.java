@@ -65,6 +65,8 @@ public class StudentController {
     private SimpMessagingTemplate messagingTemplate;
     @Autowired
     private SimpUserRegistry simpUserRegistry;
+    @Autowired
+    private com.smartvehicle.service.SmIdGeneratorService smIdGeneratorService;
 
     @PostMapping("/register")
     @Transactional
@@ -83,7 +85,10 @@ public class StudentController {
         student.setSchool(school);
         student.setParent(parent);
         student.setStatus(true);
-        student.setSmStudentId(request.getSmStudentId());
+        String smStudentId = request.getSmStudentId() != null && !request.getSmStudentId().isEmpty()
+                ? request.getSmStudentId()
+                : smIdGeneratorService.generateStudentId(request.getSchoolId());
+        student.setSmStudentId(smStudentId);
         student.setDeviceId(request.getDeviceId());
         if (request.getRouteId() != null) {
             Route route = routeService.getRouteById(request.getRouteId());
