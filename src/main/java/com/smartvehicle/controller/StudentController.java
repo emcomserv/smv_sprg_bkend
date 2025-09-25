@@ -614,17 +614,17 @@ public class StudentController {
         return ResponseEntity.ok(responseDTO);
     }
 
-    @GetMapping("/test-websocket")
-    public ResponseEntity<String> testWebSocket() {
-        Map<String, Object> testResponse = new HashMap<>();
-        testResponse.put("status", "Test");
-        testResponse.put("message", "This is a test message");
-        testResponse.put("isValid", true);
-        testResponse.put("schoolId", "TEST_SCHOOL");
-        testResponse.put("studentId", "TEST_STUDENT");
-        messagingTemplate.convertAndSend("/topic/validation", testResponse);
-        return ResponseEntity.ok("Test message sent to /topic/validation");
-    }
+//    @GetMapping("/test-websocket")
+//    public ResponseEntity<String> testWebSocket() {
+//        Map<String, Object> testResponse = new HashMap<>();
+//        testResponse.put("status", "Test");
+//        testResponse.put("message", "This is a test message");
+//        testResponse.put("isValid", true);
+//        testResponse.put("schoolId", "TEST_SCHOOL");
+//        testResponse.put("studentId", "TEST_STUDENT");
+//        messagingTemplate.convertAndSend("/topic/validation", testResponse);
+//        return ResponseEntity.ok("Test message sent to /topic/validation");
+//    }
 
     @GetMapping("/by-smStudentId")
     public ResponseEntity<StudentResponseDTO> getStudentBySmStudentId(

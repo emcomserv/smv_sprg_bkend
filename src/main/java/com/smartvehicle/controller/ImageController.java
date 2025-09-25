@@ -194,108 +194,108 @@ public class ImageController {
         return ResponseEntity.ok(resultMessage.toString());
     }
 
-    @GetMapping("/student/{studentId}/full")
-    public ResponseEntity<List<ImageResponseDTO>> getFullImagesByStudentId(@PathVariable String studentId) {
-        List<ImageResponseDTO> images = imageService.getImagesByStudentId(studentId);
-        if (images.isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
-        return ResponseEntity.ok(images);
-    }
-
-    @GetMapping("/student/{studentId}/file/{imageId}")
-    public ResponseEntity<byte[]> getImageFileByStudentIdAndImageId(@PathVariable String studentId, @PathVariable Long imageId) {
-        Optional<Image> imageOpt = imageService.getImageById(imageId);
-        if (imageOpt.isEmpty() || !imageOpt.get().getStudentId().equals(studentId)) {
-            return ResponseEntity.notFound().build();
-        }
-
-        Image image = imageOpt.get();
-        byte[] imageData = image.getBytecode();
-        String format = image.getFormat();
-
-        String contentType = getContentType(format);
-
-        return ResponseEntity.ok()
-                .header("Content-Type", contentType)
-                .header("Content-Disposition", "attachment; filename=\"image." + format + "\"")
-                .body(imageData);
-    }
-
-    @GetMapping
-    public List<Image> getAllImages() {
-        return imageService.getAllImages();
-    }
-
-    @PostMapping("/send-to-python")
-    public ResponseEntity<String> sendImageToPython(@RequestParam Long id) {
-        Optional<Image> optionalImage = imageService.getImageById(id);
-        if (optionalImage.isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
-
-        Image image = optionalImage.get();
-        try {
-            // Reconstruct ftpPath since it's not stored in the database
-            String ftpFilePath = String.format("/upload/%s/%s/Default/%s_%s_img1.%s",
-                    image.getSchoolId(), image.getStudentId(), image.getSchoolId(), image.getStudentId(), image.getFormat());
-            System.out.println(Instant.now() + " - Sending file path to Python server: " + ftpFilePath);
-            byte[] responseBytes = imageService.sendImageToPython(image, ftpFilePath);
-            return ResponseEntity.ok("Image sent to Python server successfully!");
-        } catch (IOException e) {
-            return ResponseEntity.status(500).body("Failed to send image to Python server: " + e.getMessage());
-        }
-    }
-
-    @PostMapping("/process")
-    public ResponseEntity<String> processImageViaPython(@RequestParam Long id) {
-        Optional<Image> optionalImage = imageService.getImageById(id);
-        if (optionalImage.isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
-
-        Image image = optionalImage.get();
-        try {
-            // Reconstruct ftpPath since it's not stored in the database
-            // If you have routeId available for stored images, include it; otherwise this remains legacy
-            String ftpFilePath = String.format("/upload/%s/%s/Default/%s_%s_img1.%s",
-                    image.getSchoolId(), image.getStudentId(), image.getSchoolId(), image.getStudentId(), image.getFormat());
-            System.out.println(Instant.now() + " - Sending file path to Python server: " + ftpFilePath);
-            byte[] responseBytes = imageService.sendImageToPython(image, ftpFilePath);
-            imageService.saveProcessedFile(image.getSchoolId(), image.getStudentId(), image.getId(), image.getFormat(), responseBytes);
-            return ResponseEntity.ok("Processed file saved!");
-        } catch (IOException e) {
-            return ResponseEntity.status(500).body("Processing failed: " + e.getMessage());
-        }
-    }
-
-    @PostMapping("/send-grouped-to-python")
-    public ResponseEntity<String> sendGroupedImagesToPython(@RequestParam String studentId) {
-        List<ImageResponseDTO> images = imageService.getImagesByStudentId(studentId);
-        if (images.isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
-        if (images.size() != REQUIRED_FILE_COUNT) {
-            return ResponseEntity.badRequest().body("Exactly " + REQUIRED_FILE_COUNT + " images must be available for studentId: " + studentId);
-        }
-
-        try {
-            List<String> ftpPaths = new ArrayList<>();
-            for (ImageResponseDTO image : images) {
-                // Reconstruct ftpPath since it's not stored in the database
-                // If routeId is tracked per image, insert it between schoolId and studentId in the path
-                String ftpFilePath = String.format("/upload/%s/%s/Default/%s_%s_img%d.%s",
-                        image.getSchoolId(), image.getStudentId(), image.getSchoolId(), image.getStudentId(),
-                        images.indexOf(image) + 1, image.getFormat());
-                ftpPaths.add(ftpFilePath);
-            }
-            System.out.println(Instant.now() + " - Sending file paths to Python server: " + ftpPaths);
-            byte[] responseBytes = imageService.sendGroupedImagesToPython(studentId, ftpPaths);
-            return ResponseEntity.ok("Grouped images sent to Python server successfully!");
-        } catch (IOException e) {
-            return ResponseEntity.status(500).body("Failed to send grouped images to Python server: " + e.getMessage());
-        }
-    }
+//    @GetMapping("/student/{studentId}/full")
+//    public ResponseEntity<List<ImageResponseDTO>> getFullImagesByStudentId(@PathVariable String studentId) {
+//        List<ImageResponseDTO> images = imageService.getImagesByStudentId(studentId);
+//        if (images.isEmpty()) {
+//            return ResponseEntity.notFound().build();
+//        }
+//        return ResponseEntity.ok(images);
+//    }
+//
+//    @GetMapping("/student/{studentId}/file/{imageId}")
+//    public ResponseEntity<byte[]> getImageFileByStudentIdAndImageId(@PathVariable String studentId, @PathVariable Long imageId) {
+//        Optional<Image> imageOpt = imageService.getImageById(imageId);
+//        if (imageOpt.isEmpty() || !imageOpt.get().getStudentId().equals(studentId)) {
+//            return ResponseEntity.notFound().build();
+//        }
+//
+//        Image image = imageOpt.get();
+//        byte[] imageData = image.getBytecode();
+//        String format = image.getFormat();
+//
+//        String contentType = getContentType(format);
+//
+//        return ResponseEntity.ok()
+//                .header("Content-Type", contentType)
+//                .header("Content-Disposition", "attachment; filename=\"image." + format + "\"")
+//                .body(imageData);
+//    }
+//
+//    @GetMapping
+//    public List<Image> getAllImages() {
+//        return imageService.getAllImages();
+//    }
+//
+//    @PostMapping("/send-to-python")
+//    public ResponseEntity<String> sendImageToPython(@RequestParam Long id) {
+//        Optional<Image> optionalImage = imageService.getImageById(id);
+//        if (optionalImage.isEmpty()) {
+//            return ResponseEntity.notFound().build();
+//        }
+//
+//        Image image = optionalImage.get();
+//        try {
+//            // Reconstruct ftpPath since it's not stored in the database
+//            String ftpFilePath = String.format("/upload/%s/%s/Default/%s_%s_img1.%s",
+//                    image.getSchoolId(), image.getStudentId(), image.getSchoolId(), image.getStudentId(), image.getFormat());
+//            System.out.println(Instant.now() + " - Sending file path to Python server: " + ftpFilePath);
+//            byte[] responseBytes = imageService.sendImageToPython(image, ftpFilePath);
+//            return ResponseEntity.ok("Image sent to Python server successfully!");
+//        } catch (IOException e) {
+//            return ResponseEntity.status(500).body("Failed to send image to Python server: " + e.getMessage());
+//        }
+//    }
+//
+//    @PostMapping("/process")
+//    public ResponseEntity<String> processImageViaPython(@RequestParam Long id) {
+//        Optional<Image> optionalImage = imageService.getImageById(id);
+//        if (optionalImage.isEmpty()) {
+//            return ResponseEntity.notFound().build();
+//        }
+//
+//        Image image = optionalImage.get();
+//        try {
+//            // Reconstruct ftpPath since it's not stored in the database
+//            // If you have routeId available for stored images, include it; otherwise this remains legacy
+//            String ftpFilePath = String.format("/upload/%s/%s/Default/%s_%s_img1.%s",
+//                    image.getSchoolId(), image.getStudentId(), image.getSchoolId(), image.getStudentId(), image.getFormat());
+//            System.out.println(Instant.now() + " - Sending file path to Python server: " + ftpFilePath);
+//            byte[] responseBytes = imageService.sendImageToPython(image, ftpFilePath);
+//            imageService.saveProcessedFile(image.getSchoolId(), image.getStudentId(), image.getId(), image.getFormat(), responseBytes);
+//            return ResponseEntity.ok("Processed file saved!");
+//        } catch (IOException e) {
+//            return ResponseEntity.status(500).body("Processing failed: " + e.getMessage());
+//        }
+//    }
+//
+//    @PostMapping("/send-grouped-to-python")
+//    public ResponseEntity<String> sendGroupedImagesToPython(@RequestParam String studentId) {
+//        List<ImageResponseDTO> images = imageService.getImagesByStudentId(studentId);
+//        if (images.isEmpty()) {
+//            return ResponseEntity.notFound().build();
+//        }
+//        if (images.size() != REQUIRED_FILE_COUNT) {
+//            return ResponseEntity.badRequest().body("Exactly " + REQUIRED_FILE_COUNT + " images must be available for studentId: " + studentId);
+//        }
+//
+//        try {
+//            List<String> ftpPaths = new ArrayList<>();
+//            for (ImageResponseDTO image : images) {
+//                // Reconstruct ftpPath since it's not stored in the database
+//                // If routeId is tracked per image, insert it between schoolId and studentId in the path
+//                String ftpFilePath = String.format("/upload/%s/%s/Default/%s_%s_img%d.%s",
+//                        image.getSchoolId(), image.getStudentId(), image.getSchoolId(), image.getStudentId(),
+//                        images.indexOf(image) + 1, image.getFormat());
+//                ftpPaths.add(ftpFilePath);
+//            }
+//            System.out.println(Instant.now() + " - Sending file paths to Python server: " + ftpPaths);
+//            byte[] responseBytes = imageService.sendGroupedImagesToPython(studentId, ftpPaths);
+//            return ResponseEntity.ok("Grouped images sent to Python server successfully!");
+//        } catch (IOException e) {
+//            return ResponseEntity.status(500).body("Failed to send grouped images to Python server: " + e.getMessage());
+//        }
+//    }
 
     private String getExtension(String filename) {
         int dotIndex = filename.lastIndexOf('.');

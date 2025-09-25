@@ -463,23 +463,23 @@ public class FTPClientService {
         }
     }
 
-    public boolean uploadZippedFiles(String remotePath, List<byte[]> imageDataList, List<String> fileNames) throws IOException {
-        long startTime = System.currentTimeMillis();
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        try (ZipOutputStream zos = new ZipOutputStream(baos)) {
-            for (int i = 0; i < imageDataList.size(); i++) {
-                ZipEntry entry = new ZipEntry(fileNames.get(i));
-                zos.putNextEntry(entry);
-                zos.write(imageDataList.get(i));
-                zos.closeEntry();
-            }
-        }
-        byte[] zipData = baos.toByteArray();
-        long zipTime = System.currentTimeMillis() - startTime;
-        log.debug(Instant.now() + " - Created zip file of {} bytes for upload to: {} in {} ms", zipData.length, remotePath, zipTime);
-
-        try (BufferedInputStream bis = new BufferedInputStream(new ByteArrayInputStream(zipData), bufferSize)) {
-            return uploadFile(remotePath, bis);
-        }
-    }
+//    public boolean uploadZippedFiles(String remotePath, List<byte[]> imageDataList, List<String> fileNames) throws IOException {
+//        long startTime = System.currentTimeMillis();
+//        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+//        try (ZipOutputStream zos = new ZipOutputStream(baos)) {
+//            for (int i = 0; i < imageDataList.size(); i++) {
+//                ZipEntry entry = new ZipEntry(fileNames.get(i));
+//                zos.putNextEntry(entry);
+//                zos.write(imageDataList.get(i));
+//                zos.closeEntry();
+//            }
+//        }
+//        byte[] zipData = baos.toByteArray();
+//        long zipTime = System.currentTimeMillis() - startTime;
+//        log.debug(Instant.now() + " - Created zip file of {} bytes for upload to: {} in {} ms", zipData.length, remotePath, zipTime);
+//
+//        try (BufferedInputStream bis = new BufferedInputStream(new ByteArrayInputStream(zipData), bufferSize)) {
+//            return uploadFile(remotePath, bis);
+//        }
+//    }
 }
