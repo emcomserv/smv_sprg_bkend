@@ -14,6 +14,12 @@ public interface SwipeStudentDeviceRepository extends JpaRepository<SwipeStudent
     // Returns the latest swipe record for a student by timestamp
     SwipeStudentDevice findTopByStudentIdOrderByTimestampDesc(String studentId);
 
+    // Latest swipe for a specific school/route/student
+    SwipeStudentDevice findTopBySchoolIdAndRouteIdAndStudentIdOrderByTimestampDesc(String schoolId, String routeId, String studentId);
+
+    // Exact match by composite key values
+    SwipeStudentDevice findBySchoolIdAndRouteIdAndStudentIdAndTimestamp(String schoolId, String routeId, String studentId, LocalDateTime timestamp);
+
     // Distinct student IDs within date range for a school+route
     @Query("select distinct s.studentId from SwipeStudentDevice s where s.schoolId = :schoolId and s.routeId = :routeId and s.timestamp between :start and :end order by s.studentId")
     List<String> findDistinctStudentIdsBySchoolRouteAndDateRange(

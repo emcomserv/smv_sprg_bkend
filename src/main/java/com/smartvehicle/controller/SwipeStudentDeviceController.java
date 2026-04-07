@@ -513,7 +513,7 @@ public class SwipeStudentDeviceController {
             // Parse the date
             java.time.LocalDate targetDate = java.time.LocalDate.parse(date);
             LocalDateTime startOfDay = targetDate.atStartOfDay();
-            LocalDateTime endOfDay = targetDate.plusDays(1).atStartOfDay().minusNanos(1);
+            // LocalDateTime endOfDay = targetDate.plusDays(1).atStartOfDay().minusNanos(1);
             
             // Get students for this school, optionally filtered by route
             List<Student> students;
@@ -701,8 +701,14 @@ public class SwipeStudentDeviceController {
             @RequestParam String routeId,
             @RequestParam String studentId) {
         try {
-            String relativeDir = schoolId + "/" + routeId + "/" + studentId;
+            String baseDir = schoolId + "/" + routeId + "/" + studentId;
+            String relativeDir = baseDir + "/Default";
             java.util.List<String> files = ftpService.listFilesInDirectory(relativeDir);
+            // Fallback to student root if Default folder empty/missing
+            if (files == null || files.isEmpty()) {
+                relativeDir = baseDir;
+                files = ftpService.listFilesInDirectory(relativeDir);
+            }
             if (files == null || files.isEmpty()) {
                 return ResponseEntity.notFound().build();
             }
@@ -752,36 +758,133 @@ public class SwipeStudentDeviceController {
     public ResponseEntity<?> getFirstImageFromFtpAsBase64(
             @RequestParam String schoolId,
             @RequestParam String routeId,
-            @RequestParam String studentId) {
+            @RequestParam String studentId,
+            @RequestParam(name = "timestamp", required = false) String timestamp) {
         try {
-            String relativeDir = schoolId + "/" + routeId + "/" + studentId;
+            String baseDir = schoolId + "/" + routeId + "/" + studentId;
+            String relativeDir = baseDir + "/Default";
+
+            // Try to resolve swipe record either by timestamp or latest
+            SwipeStudentDevice selectedSwipe = null;
+            if (timestamp != null && !timestamp.isBlank()) {
+                try {
+                    LocalDateTime ts = LocalDateTime.parse(timestamp);
+                    selectedSwipe = swipeStudentDeviceRepository
+                            .findBySchoolIdAndRouteIdAndStudentIdAndTimestamp(schoolId, routeId, studentId, ts);
+                } catch (Exception e) {
+                    return ResponseEntity.badRequest().body("Invalid timestamp format. Use ISO yyyy-MM-ddTHH:mm:ss");
+                }
+            }
+            if (selectedSwipe == null) {
+                selectedSwipe = swipeStudentDeviceRepository
+                        .findTopBySchoolIdAndRouteIdAndStudentIdOrderByTimestampDesc(schoolId, routeId, studentId);
+            }
+
             java.util.List<String> files = ftpService.listFilesInDirectory(relativeDir);
+            if (files == null || files.isEmpty()) {
+                relativeDir = baseDir; // fallback to base folder
+                files = ftpService.listFilesInDirectory(relativeDir);
+            }
+            if (files == null || files.isEmpty()) {
+                // Build expected filename using provided timestamp if present, else selectedSwipe timestamp
+                String expectedNameNoExt = null;
+                if (timestamp != null && !timestamp.isBlank()) {
+                    try {
+                        LocalDateTime ts = LocalDateTime.parse(timestamp);
+                        String dateStrParam = ts.format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd"));
+                        String timeStrParam = ts.format(java.time.format.DateTimeFormatter.ofPattern("HHmmss"));
+                        expectedNameNoExt = studentId + "_" + dateStrParam + "-" + timeStrParam;
+                    } catch (Exception ignored) {}
+                }
+                if (expectedNameNoExt == null && selectedSwipe != null && selectedSwipe.getTimestamp() != null) {
+                    String dateStr = selectedSwipe.getTimestamp().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd"));
+                    String timeStr = selectedSwipe.getTimestamp().format(java.time.format.DateTimeFormatter.ofPattern("HHmmss"));
+                    expectedNameNoExt = studentId + "_" + dateStr + "-" + timeStr;
+                }
+                if (expectedNameNoExt != null) {
+                String[] exts = new String[] {".jpg", ".jpeg", ".png"};
+                String[] dirs = new String[] { baseDir + "/Default", baseDir };
+                for (String dir : dirs) {
+                    for (String ext : exts) {
+                        String candidatePath = dir + "/" + expectedNameNoExt + ext;
+                        try {
+                            byte[] data = ftpService.readFile(candidatePath);
+                            if (data != null) {
+                                String format = ext.substring(1);
+                                String base64 = Base64.getEncoder().encodeToString(data);
+                                java.util.Map<String, Object> resp = new java.util.HashMap<>();
+                                resp.put("filename", expectedNameNoExt + ext);
+                                resp.put("contentType", contentTypeFor(format));
+                                resp.put("base64", base64);
+                                if (selectedSwipe != null) {
+                                    resp.put("schoolId", selectedSwipe.getSchoolId());
+                                    resp.put("routeId", selectedSwipe.getRouteId());
+                                    resp.put("studentId", selectedSwipe.getStudentId());
+                                    resp.put("timestamp", selectedSwipe.getTimestamp());
+                                } else {
+                                    resp.put("schoolId", schoolId);
+                                    resp.put("routeId", routeId);
+                                    resp.put("studentId", studentId);
+                                }
+                                return ResponseEntity.ok(resp);
+                            }
+                        } catch (Exception ignored) {}
+                    }
+                }
+                }
+            }
             if (files == null || files.isEmpty()) {
                 return ResponseEntity.status(404).body("No image found");
             }
 
-            files.sort(String::compareTo);
-            String first = null;
-            for (String name : files) {
-                String lower = name.toLowerCase();
-                if (lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png")) {
-                    first = name;
-                    break;
+            // If we have a swipe record with timestamp, try to find a matching file name pattern
+            String chosen = null;
+            if (selectedSwipe != null && selectedSwipe.getTimestamp() != null) {
+                String dateStr = selectedSwipe.getTimestamp().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd"));
+                String timeStr = selectedSwipe.getTimestamp().format(java.time.format.DateTimeFormatter.ofPattern("HHmmss"));
+                String prefix = studentId + "_" + dateStr + "-" + timeStr; // expected pattern
+                for (String name : files) {
+                    String lower = name.toLowerCase();
+                    if ((lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png")) && name.startsWith(prefix)) {
+                        chosen = name;
+                        break;
+                    }
                 }
             }
-            if (first == null) {
+            // Fallback to first image if not found by timestamped pattern
+            if (chosen == null) {
+                files.sort(String::compareTo);
+                for (String name : files) {
+                    String lower = name.toLowerCase();
+                    if (lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png")) {
+                        chosen = name;
+                        break;
+                    }
+                }
+            }
+            if (chosen == null) {
                 return ResponseEntity.status(404).body("No image found");
             }
 
-            String format = first.substring(first.lastIndexOf('.') + 1);
-            String relativePathWithFile = relativeDir + "/" + first;
+            String format = chosen.substring(chosen.lastIndexOf('.') + 1);
+            String relativePathWithFile = relativeDir + "/" + chosen;
             byte[] data = ftpService.readFile(relativePathWithFile);
 
             String base64 = Base64.getEncoder().encodeToString(data);
             java.util.Map<String, Object> resp = new java.util.HashMap<>();
-            resp.put("filename", first);
+            resp.put("filename", chosen);
             resp.put("contentType", contentTypeFor(format));
             resp.put("base64", base64);
+            if (selectedSwipe != null) {
+                resp.put("schoolId", selectedSwipe.getSchoolId());
+                resp.put("routeId", selectedSwipe.getRouteId());
+                resp.put("studentId", selectedSwipe.getStudentId());
+                resp.put("timestamp", selectedSwipe.getTimestamp());
+            } else {
+                resp.put("schoolId", schoolId);
+                resp.put("routeId", routeId);
+                resp.put("studentId", studentId);
+            }
             return ResponseEntity.ok(resp);
         } catch (IOException e) {
             return ResponseEntity.status(500).body("Failed to read image: " + e.getMessage());
