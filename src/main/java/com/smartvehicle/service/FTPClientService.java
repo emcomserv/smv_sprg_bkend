@@ -19,8 +19,6 @@ import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
 
 @Service
 @Slf4j
@@ -281,95 +279,94 @@ public class FTPClientService {
         long bufferingTime = System.currentTimeMillis() - startBuffering;
         log.debug(Instant.now() + " - Buffered {} bytes for upload to: {} in {} ms", fileData.length, remotePath, bufferingTime);
 
-        try (BufferedInputStream bufferedInputStream = new BufferedInputStream(new ByteArrayInputStream(fileData), bufferSize)) {
+        try {
             while (retryCount < MAX_RETRIES) {
-                try {
-                    if (!ftpClient.isConnected() || !ftpClient.sendNoOp()) {
-                        log.warn(Instant.now() + " - FTP connection is not active. Reinitializing...");
-                        init();
-                    }
-
-                    log.info(Instant.now() + " - Uploading file to FTP path: {} ({} bytes), attempt {}/{}", remotePath, fileData.length, retryCount + 1, MAX_RETRIES);
-                    long startTime = System.currentTimeMillis();
-
-                    ftpClient.setSendBufferSize(bufferSize);
-                    ftpClient.setReceiveBufferSize(bufferSize);
-
-                    // Start data transfer
-                    long dataTransferStart = System.currentTimeMillis();
-                    boolean success = ftpClient.storeFile(remotePath, bufferedInputStream);
-                    long dataTransferDuration = System.currentTimeMillis() - dataTransferStart;
-                    log.info(Instant.now() + " - Data transfer completed for: {} in {} ms", remotePath, dataTransferDuration);
-
-                    // Wait for server response with a timeout
-                    long responseWaitStart = System.currentTimeMillis();
-                    ftpClient.setSoTimeout(RESPONSE_TIMEOUT);
-                    boolean completed = ftpClient.completePendingCommand();
-                    long responseWaitDuration = System.currentTimeMillis() - responseWaitStart;
-                    log.info(Instant.now() + " - Waited {} ms for server response (226 Transfer complete)", responseWaitDuration);
-
-                    long totalDuration = System.currentTimeMillis() - startTime;
-                    double throughput = dataTransferDuration > 0 ? (fileData.length / 1024.0) / (dataTransferDuration / 1000.0) : 0;
-
-                    if (!completed) {
-                        log.warn(Instant.now() + " - Failed to receive server response after {} ms, control connection state: {}, FTP reply: {}",
-                                totalDuration, ftpClient.isConnected() ? "connected" : "disconnected", ftpClient.getReplyString());
-                        // Immediate post-timeout file existence check
-                        boolean exists = fileExists(remotePath);
-                        log.info(Instant.now() + " - Post-timeout file existence check for {} returned: {}", remotePath, exists);
-                        if (exists) {
-                            log.info(Instant.now() + " - File {} exists on server despite timeout, treating as success", remotePath);
-                            return true;
+                // Recreate the stream for every retry; retrying with a drained stream leads to 0-byte uploads.
+                try (BufferedInputStream bufferedInputStream =
+                             new BufferedInputStream(new ByteArrayInputStream(fileData), bufferSize)) {
+                    try {
+                        if (!ftpClient.isConnected() || !ftpClient.sendNoOp()) {
+                            log.warn(Instant.now() + " - FTP connection is not active. Reinitializing...");
+                            init();
                         }
-                        throw new IOException("Failed to complete FTP file transfer: server did not send completion response within " + RESPONSE_TIMEOUT + " ms");
-                    }
 
-                    if (success) {
-                        if (useChmod) {
-                            try {
-                                String chmodValue = "644";
-                                log.debug(Instant.now() + " - Setting permissions to {} for file: {}", chmodValue, remotePath);
-                                ftpClient.sendSiteCommand("CHMOD " + chmodValue + " " + remotePath);
-                            } catch (IOException e) {
-                                log.warn(Instant.now() + " - Failed to set permissions for file: {}", remotePath, e);
+                        log.info(Instant.now() + " - Uploading file to FTP path: {} ({} bytes), attempt {}/{}", remotePath, fileData.length, retryCount + 1, MAX_RETRIES);
+                        long startTime = System.currentTimeMillis();
+
+                        ftpClient.setSendBufferSize(bufferSize);
+                        ftpClient.setReceiveBufferSize(bufferSize);
+
+                        long dataTransferStart = System.currentTimeMillis();
+                        boolean success = ftpClient.storeFile(remotePath, bufferedInputStream);
+                        long dataTransferDuration = System.currentTimeMillis() - dataTransferStart;
+                        log.info(Instant.now() + " - Data transfer completed for: {} in {} ms", remotePath, dataTransferDuration);
+
+                        long responseWaitStart = System.currentTimeMillis();
+                        ftpClient.setSoTimeout(RESPONSE_TIMEOUT);
+                        boolean completed = ftpClient.completePendingCommand();
+                        long responseWaitDuration = System.currentTimeMillis() - responseWaitStart;
+                        log.info(Instant.now() + " - Waited {} ms for server response (226 Transfer complete)", responseWaitDuration);
+
+                        long totalDuration = System.currentTimeMillis() - startTime;
+                        double throughput = dataTransferDuration > 0 ? (fileData.length / 1024.0) / (dataTransferDuration / 1000.0) : 0;
+
+                        if (!completed) {
+                            log.warn(Instant.now() + " - Failed to receive server response after {} ms, control connection state: {}, FTP reply: {}",
+                                    totalDuration, ftpClient.isConnected() ? "connected" : "disconnected", ftpClient.getReplyString());
+                            boolean exists = fileExists(remotePath);
+                            log.info(Instant.now() + " - Post-timeout file existence check for {} returned: {}", remotePath, exists);
+                            if (exists) {
+                                log.info(Instant.now() + " - File {} exists on server despite timeout, treating as success", remotePath);
+                                return true;
                             }
+                            throw new IOException("Failed to complete FTP file transfer: server did not send completion response within " + RESPONSE_TIMEOUT + " ms");
                         }
-                        log.info(Instant.now() + " - File uploaded successfully to: {} in {} ms (data transfer: {} ms, response wait: {} ms, throughput: {} KB/s)",
-                                remotePath, totalDuration, dataTransferDuration, responseWaitDuration, String.format("%.2f", throughput));
-                        return true;
-                    } else {
-                        log.error(Instant.now() + " - FTP upload failed for: {} after {} ms, control connection state: {}, FTP reply: {}",
-                                remotePath, totalDuration, ftpClient.isConnected() ? "connected" : "disconnected", ftpClient.getReplyString());
-                        throw new IOException("FTP upload failed for: " + remotePath);
-                    }
-                } catch (FTPConnectionClosedException | SocketException e) {
-                    retryCount++;
-                    log.warn(Instant.now() + " - FTP connection issue during file upload. Retrying... Attempt: {}/{}", retryCount, MAX_RETRIES, e);
-                    init();
-                } catch (IOException e) {
-                    retryCount++;
-                    log.warn(Instant.now() + " - Upload failed for: {} after attempt {}/{}, error: {}. Checking file existence before retry...", remotePath, retryCount, MAX_RETRIES, e.getMessage());
-                    // Immediate pre-retry file existence check
-                    boolean exists = fileExists(remotePath);
-                    log.info(Instant.now() + " - Pre-retry file existence check for {} returned: {}", remotePath, exists);
-                    if (exists) {
-                        log.info(Instant.now() + " - File {} exists on server before retry, treating as success", remotePath);
-                        return true;
-                    }
-                    if (retryCount >= MAX_RETRIES) {
-                        log.error(Instant.now() + " - Failed to upload file after {} attempts: {}, error: {}", MAX_RETRIES, remotePath, e.getMessage());
-                        // Final existence check before failing
-                        boolean finalExists = fileExists(remotePath);
-                        log.info(Instant.now() + " - Final file existence check for {} returned: {}", remotePath, finalExists);
-                        if (finalExists) {
-                            log.info(Instant.now() + " - File {} exists on server after retries, treating as success", remotePath);
+
+                        if (success) {
+                            if (useChmod) {
+                                try {
+                                    String chmodValue = "644";
+                                    log.debug(Instant.now() + " - Setting permissions to {} for file: {}", chmodValue, remotePath);
+                                    ftpClient.sendSiteCommand("CHMOD " + chmodValue + " " + remotePath);
+                                } catch (IOException e) {
+                                    log.warn(Instant.now() + " - Failed to set permissions for file: {}", remotePath, e);
+                                }
+                            }
+                            log.info(Instant.now() + " - File uploaded successfully to: {} in {} ms (data transfer: {} ms, response wait: {} ms, throughput: {} KB/s)",
+                                    remotePath, totalDuration, dataTransferDuration, responseWaitDuration, String.format("%.2f", throughput));
+                            return true;
+                        } else {
+                            log.error(Instant.now() + " - FTP upload failed for: {} after {} ms, control connection state: {}, FTP reply: {}",
+                                    remotePath, totalDuration, ftpClient.isConnected() ? "connected" : "disconnected", ftpClient.getReplyString());
+                            throw new IOException("FTP upload failed for: " + remotePath);
+                        }
+                    } catch (FTPConnectionClosedException | SocketException e) {
+                        retryCount++;
+                        log.warn(Instant.now() + " - FTP connection issue during file upload. Retrying... Attempt: {}/{}", retryCount, MAX_RETRIES, e);
+                        init();
+                    } catch (IOException e) {
+                        retryCount++;
+                        log.warn(Instant.now() + " - Upload failed for: {} after attempt {}/{}, error: {}. Checking file existence before retry...", remotePath, retryCount, MAX_RETRIES, e.getMessage());
+                        boolean exists = fileExists(remotePath);
+                        log.info(Instant.now() + " - Pre-retry file existence check for {} returned: {}", remotePath, exists);
+                        if (exists) {
+                            log.info(Instant.now() + " - File {} exists on server before retry, treating as success", remotePath);
                             return true;
                         }
-                        throw e;
+                        if (retryCount >= MAX_RETRIES) {
+                            log.error(Instant.now() + " - Failed to upload file after {} attempts: {}, error: {}", MAX_RETRIES, remotePath, e.getMessage());
+                            boolean finalExists = fileExists(remotePath);
+                            log.info(Instant.now() + " - Final file existence check for {} returned: {}", remotePath, finalExists);
+                            if (finalExists) {
+                                log.info(Instant.now() + " - File {} exists on server after retries, treating as success", remotePath);
+                                return true;
+                            }
+                            throw e;
+                        }
+                        init();
+                    } finally {
+                        ftpClient.setSoTimeout(0);
                     }
-                    init();
-                } finally {
-                    ftpClient.setSoTimeout(0);
                 }
                 if (retryCount < MAX_RETRIES) {
                     try {
