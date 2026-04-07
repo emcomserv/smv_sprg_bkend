@@ -25,6 +25,9 @@ public class JwtUtils {
   @Value("${smart_vehicle.app.jwtExpirationMs}")
   private int jwtExpirationMs;
 
+  @Value("${smart_vehicle.app.jwtRefreshExpirationMs}")
+  private int jwtRefreshExpirationMs;
+
   public String generateJwtToken(Authentication authentication) {
     UserDetailsImpl userPrincipal = (UserDetailsImpl) authentication.getPrincipal();
 
@@ -38,6 +41,41 @@ public class JwtUtils {
             .setSubject(userPrincipal.getUsername())
             .setIssuedAt(new Date())
             .setExpiration(new Date((new Date()).getTime() + jwtExpirationMs))
+            .signWith(key(), SignatureAlgorithm.HS256)
+            .compact();
+  }
+
+  public String generateTokenFromUser(com.smartvehicle.entity.User user) {
+    Map<String, Object> claims = new HashMap<>();
+    claims.put("userId", user.getId());
+    if (user.getRoles() != null && !user.getRoles().isEmpty()) {
+      claims.put("role", "ROLE_" + user.getRoles().get(0).getName().toUpperCase());
+    }
+
+    return Jwts.builder()
+            .setClaims(claims)
+            .setSubject(user.getUsername())
+            .setIssuedAt(new Date())
+            .setExpiration(new Date((new Date()).getTime() + jwtExpirationMs))
+            .signWith(key(), SignatureAlgorithm.HS256)
+            .compact();
+  }
+
+  public String generateRefreshToken(Authentication authentication) {
+    UserDetailsImpl userPrincipal = (UserDetailsImpl) authentication.getPrincipal();
+    return Jwts.builder()
+            .setSubject(userPrincipal.getUsername())
+            .setIssuedAt(new Date())
+            .setExpiration(new Date((new Date()).getTime() + jwtRefreshExpirationMs))
+            .signWith(key(), SignatureAlgorithm.HS256)
+            .compact();
+  }
+
+  public String generateRefreshTokenFromUser(com.smartvehicle.entity.User user) {
+    return Jwts.builder()
+            .setSubject(user.getUsername())
+            .setIssuedAt(new Date())
+            .setExpiration(new Date((new Date()).getTime() + jwtRefreshExpirationMs))
             .signWith(key(), SignatureAlgorithm.HS256)
             .compact();
   }

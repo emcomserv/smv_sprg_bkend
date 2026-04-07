@@ -5,6 +5,8 @@ import com.smartvehicle.exception.ApplicationException;
 import com.smartvehicle.payload.request.LoginRequest;
 import com.smartvehicle.payload.request.ResetPasswordRequest;
 import com.smartvehicle.payload.response.JwtResponse;
+import com.smartvehicle.payload.response.TokenRefreshResponse;
+import com.smartvehicle.payload.request.TokenRefreshRequest;
 import com.smartvehicle.payload.response.UserEntityResDTO;
 import com.smartvehicle.repository.*;
 import com.smartvehicle.security.jwt.CustomRequestContextHolder;
@@ -93,6 +95,7 @@ public class AuthController {
         SecurityContextHolder.getContext().setAuthentication(authentication);
         UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
         String jwt = jwtUtils.generateJwtToken(authentication);
+        String refreshToken = jwtUtils.generateRefreshToken(authentication);
 
         try {
             if (StringUtils.hasText(CustomRequestContextHolder.getDeviceType())
@@ -159,7 +162,7 @@ public class AuthController {
             throw new ApplicationException("No role assigned to this user");
         }
 
-        return ResponseEntity.ok(new JwtResponse(jwt, userDetails.getId(), userDetails.getUsername(), user.getTwoFactorEnabled(), roleNames, entityObj));
+        return ResponseEntity.ok(new JwtResponse(jwt, refreshToken, userDetails.getId(), userDetails.getUsername(), user.getTwoFactorEnabled(), roleNames, entityObj));
     }
 
     private void validateMobileLogin(boolean isMobile) {
@@ -181,6 +184,25 @@ public class AuthController {
         user.setPassword(encoder.encode(request.getPassword()));
         userRepository.save(user);
         return ResponseEntity.ok(true);
+    }
+
+    @PostMapping("/refreshtoken")
+    public ResponseEntity<?> refreshtoken(@Valid @RequestBody TokenRefreshRequest request) {
+        String requestRefreshToken = request.getRefreshToken();
+
+        if (jwtUtils.validateJwtToken(requestRefreshToken)) {
+            String username = jwtUtils.getUserNameFromJwtToken(requestRefreshToken);
+            User user = userRepository.findByUsername(username)
+                    .orElseThrow(() -> new ApplicationException("User not found!", HttpStatus.NOT_FOUND));
+
+            String token = jwtUtils.generateTokenFromUser(user);
+            String newRefreshToken = jwtUtils.generateRefreshTokenFromUser(user);
+
+            return ResponseEntity.ok(new TokenRefreshResponse(token, newRefreshToken));
+        }
+
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(java.util.Map.of("message", "Invalid or Expired Refresh Token"));
     }
 
     // 🔸 NEW: Send OTP manually for testing
