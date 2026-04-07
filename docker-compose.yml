@@ -1,0 +1,14 @@
+services:
+  smartvehicle-app:
+    image: smart_vehicle:1.0
+
+    network_mode: host
+
+    volumes:
+      - ./logs:/app/logs
+      - /home/appusr/application/smv_sprg_bkend/src/main/resources/application.properties:/app/classes/application.properties
+
+    environment:
+      - SPRING_CONFIG_LOCATION=file:/app/classes/application.properties
+
+    restart: unless-stopped
